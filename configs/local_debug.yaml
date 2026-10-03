@@ -1,0 +1,51 @@
+# Local debugging configuration for the tiny BC phenomenon detector.
+#
+# Sized for the development machine this was written on: GTX 1650 (4 GB VRAM) and 5.8 GB
+# of system RAM. Per SETUP.md section 4 this is a correctness and falsification harness,
+# not a training configuration — do not read its numbers as results.
+#
+# Every field here is shared by all camera conditions in an ablation. Only `views`
+# changes between runs, which is what SETUP.md section 7 requires.
+
+# Frame cache built by scripts/build_frame_cache.py. Override on the command line.
+cache: outputs/cache/NavigateKitchen_target_r84_e40
+
+views: single_primary          # overridden per ablation arm
+
+# --- data ---
+val_fraction: 0.2
+split_seed: 0                  # identical split across every condition
+n_obs_steps: 1                 # one frame; section 8 asks for a short history
+action_horizon: 1              # one-step action prediction
+use_state: true
+
+# --- model ---
+# Shared encoder + mean fusion keeps the trainable parameter count independent of the
+# number of views, which is SETUP.md section 12 Control B by construction.
+encoder: tiny_cnn
+fusion: mean
+feat_dim: 256
+width: 32
+hidden_dim: 512
+dropout: 0.0
+
+# --- optimisation (identical across conditions) ---
+seed: 0
+epochs: 20
+batch_size: 64
+lr: 3.0e-4
+weight_decay: 1.0e-4
+loss: l2
+grad_clip: 1.0
+
+# --- runtime ---
+device: auto
+amp: false                     # off by default: AMP adds run-to-run variation
+num_workers: 2                 # keep low: 5.8 GB RAM total
+eval_every: 1
+
+# --- tracking (section 16) ---
+output_root: outputs/runs
+policy: bc
+wandb: false
+wandb_project: p2c

@@ -1,0 +1,70 @@
+# Ablation setting for a target *composite* task (default: StackBowlsCabinet).
+#
+# Why a composite task is the right primary setting for P2C, and the atomic tasks are not:
+#
+# 1. **Unambiguous goal.** All 515 StackBowlsCabinet episodes share one instruction, so the
+#    action is a function of the observation. NavigateKitchen spreads 500 episodes over 14
+#    instructions ("navigate to the sink" / "to the stove" / ...) that are *not* recoverable
+#    from the image, so a vision-only policy there cannot beat the conditional mean no
+#    matter how many cameras it gets. A flat loss on that task says nothing about view
+#    sufficiency.
+# 2. **Per-frame stage labels.** Only target composite datasets carry
+#    `annotation.human.subtask_stage`, which SETUP.md sections 10-11 need.
+# 3. **Manipulation-heavy.** Occlusion and fine alignment are where complementary evidence
+#    should matter; a navigation task is mostly gross motion.
+#
+# Sized for a GTX 1650 (4 GB) and 5.8 GB RAM. Build the cache first:
+#   python scripts/build_frame_cache.py --task StackBowlsCabinet --num-episodes 120 --res 96
+
+cache: outputs/cache/StackBowlsCabinet_target_r96_e120
+
+views: single_primary          # overridden per ablation arm
+
+# --- data ---
+val_fraction: 0.2
+split_seed: 0
+n_obs_steps: 1
+action_horizon: 1
+use_state: true
+
+# --- model ---
+# Shared encoder + mean fusion => parameter count independent of the view count
+# (SETUP.md section 12, Control B).
+encoder: tiny_cnn
+fusion: mean
+feat_dim: 256
+width: 32
+hidden_dim: 512
+# Mild dropout: the atomic-task run overfitted within one epoch (train loss fell while
+# validation loss rose), so some regularisation is needed for the comparison between
+# conditions to be about information rather than about which arm overfits first.
+dropout: 0.1
+# Training-time random-shift augmentation (DrQ-style), identical for every arm. Without
+# it the model reaches train MSE 0.14 while validation rises, so "best" lands at epoch 1
+# and the ablation compares under-trained models.
+augment: true
+aug_pad: 4
+
+# --- optimisation (identical across conditions) ---
+seed: 0
+# 20, not more: every arm of the atomic-task run reached its best validation loss by
+# epoch 19, and this cache has 6x the data, so a longer schedule buys overfitting rather
+# than signal. SETUP.md section 8 wants a fast falsification test, not a tuned policy.
+epochs: 20
+batch_size: 64
+lr: 3.0e-4
+weight_decay: 1.0e-4
+loss: l2
+grad_clip: 1.0
+
+# --- runtime ---
+device: auto
+amp: false
+num_workers: 3
+eval_every: 1
+
+# --- tracking ---
+output_root: outputs/runs_composite
+policy: bc
+wandb: false
+wandb_project: p2c

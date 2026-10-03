@@ -1,0 +1,38 @@
+# P2C requirements.
+#
+# The MVP data study (SETUP.md stages 0-2) reads RoboCasa365's LeRobot datasets directly
+# as parquet + mp4, so it needs only this list. It does **not** need robocasa, robosuite,
+# lerobot or MuJoCo, and therefore does not need a working GPU renderer — which is what
+# makes it runnable on a machine without Vulkan.
+#
+# Install into the project environment:
+#   conda create -c conda-forge -n robocasa python=3.11 -y
+#   conda activate robocasa
+#   pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
+#   pip install -r requirements.txt
+
+# --- core ---
+numpy>=1.26
+torch>=2.2            # install from the CUDA index above, not from PyPI, for GPU support
+torchvision>=0.17     # only needed for the optional frozen-ResNet encoder
+pyarrow>=15.0         # reads the LeRobot parquet trajectory files
+opencv-python>=4.9    # decodes the per-camera mp4 streams
+pyyaml>=6.0           # config files
+
+# --- analysis and reporting ---
+matplotlib>=3.8       # the view-comparison figure
+pandas>=2.0           # convenience for reading the emitted CSVs
+
+# --- tests ---
+pytest>=8.0
+
+# --- optional ---
+# wandb                 # enable with --wandb; JSON/CSV tracking works without it
+#
+# --- for the simulator stages only (rollout eval, remote Diffusion Policy) ---
+# These are NOT needed for the MVP data study. Install from the upstream repos:
+#   git clone https://github.com/ARISE-Initiative/robosuite && pip install -e robosuite
+#   git clone https://github.com/robocasa/robocasa   && pip install -e robocasa
+# Note robocasa pins numpy==2.2.5, mujoco==3.3.1 and lerobot==0.3.3; resolving that set
+# can take a long time and will downgrade packages, so install it in a separate step
+# after the data study runs.

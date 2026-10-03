@@ -1,0 +1,21 @@
+# External upstream repos (RoboCasa, robosuite, diffusion_policy) — kept as siblings,
+# not vendored. See PROGRESS.md.
+external/
+
+# Downloaded RoboCasa365 LeRobot datasets (GBs) and MuJoCo kitchen assets
+datasets/
+assets/
+
+# Experiment outputs: checkpoints, logs, figures, summary tables
+outputs/
+wandb/
+
+# Windows artifacts from files copied in via WSL
+*:Zone.Identifier
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/

@@ -1,0 +1,42 @@
+# Overfit sanity test, SETUP.md section 18.
+#
+# Train on 16-64 samples until the loss is near zero. If this fails, the pipeline is
+# broken and no full experiment should be started. Run with:
+#
+#   python scripts/train_local_bc.py --config configs/overfit.yaml --views primary --overfit 32
+#
+# Note the overfit mode validates on the *same* frames it trains on, deliberately: the
+# question is only whether the model can fit data at all.
+
+cache: outputs/cache/NavigateKitchen_target_r84_e40
+views: single_primary
+
+val_fraction: 0.2
+split_seed: 0
+n_obs_steps: 1
+action_horizon: 1
+use_state: true
+
+encoder: tiny_cnn
+fusion: mean
+feat_dim: 256
+width: 32
+hidden_dim: 512
+dropout: 0.0
+
+seed: 0
+epochs: 150
+batch_size: 16
+lr: 1.0e-3        # higher than the real config: we want fast memorisation
+weight_decay: 0.0 # no regularisation; it would fight the overfit test
+loss: l2
+grad_clip: 1.0
+
+device: auto
+amp: false
+num_workers: 0    # tiny subset; workers add overhead and RAM for nothing
+eval_every: 10
+
+output_root: outputs/runs
+policy: bc
+wandb: false
