@@ -37,6 +37,7 @@ Python 3.11.16 at `/home/pavt1024/miniconda3/envs/robocasa`. Verified by import:
 
 | Package | Version | Note |
 |---|---|---|
+| imageio-ffmpeg | 0.6.0 | needed for mp4 writing; robocasa does not declare it |
 | torch | 2.6.0+cu124 | **CUDA available: True**, GTX 1650, sm_75, 4.29 GB |
 | robocasa | 1.0.1 | editable from `external/robocasa`, installed `--no-deps` |
 | robosuite | 1.5.2 | master branch |
@@ -73,7 +74,41 @@ Known gaps from this approach, all harmless for P2C:
 - `numba` 0.68.0 and `scipy` 1.17.1 differ from robocasa's pins; neither is asserted and
   nothing has failed because of it.
 
-## 3. Key finding: the local data path needs no renderer
+## 3. Simulator path: verified working (EGL)
+
+`scripts/check_sim_env.py` probes each MuJoCo GL backend separately and reports how far it
+gets: `mujoco import -> robocasa import -> env created -> reset -> step -> rendered`.
+
+| Backend | Result |
+|---|---|
+| **egl** | **works** — frames 128x128x3, non-zero (means ~124 and ~78) |
+| **glfw** | **works** — same |
+| osmesa | fails (`libOSMesa` not installed); not needed given the two above |
+
+So closed-loop rollout evaluation **is** possible on this machine. The earlier concern
+about the missing Vulkan ICD was misplaced: MuJoCo renders through EGL, not Vulkan, and
+NVIDIA's EGL works under WSL2.
+
+Rendered proof: `outputs/viz/sim_render_egl.png` (three synchronised cameras over three
+timesteps).
+
+### Three traps on the way there, all of which looked like something else
+
+1. **Kitchen assets were never downloaded.** Env creation failed with a missing
+   `UtensilRack002/model.xml`, which reads like a broken install but was just the absent
+   ~10 GB asset pack. Now present (23 GB under `external/robocasa/robocasa/models/assets`).
+2. **`download_kitchen_assets` exits 0 when it fails.** It asks `Proceed? (y/n)` through
+   `input()`; with no stdin it raises `EOFError` and still returns exit code 0. In a script
+   that reads as success while nothing was downloaded. Pipe `yes y` into it, and check the
+   asset directory size rather than the exit code.
+3. **`imageio` needs its ffmpeg plugin**, which robocasa does not declare. Without
+   `imageio[ffmpeg]`, any mp4 writing fails with "Could not find a backend". Installed.
+
+Also worth knowing: `robocasa.utils.env_utils.run_random_rollouts` reaches for `env.sim`,
+but `gym.make` returns an `OrderEnforcing` wrapper, so the documented one-liner raises
+`AttributeError`. Use `env.unwrapped.sim`.
+
+## 4. The data path needs no renderer either
 
 RoboCasa365 datasets are LeRobot format and **ship mp4 already rendered for three
 synchronised cameras**. Verified by reading `meta/info.json` and decoding the mp4 directly:
@@ -92,7 +127,7 @@ Consequences:
   assigns to the remote server anyway.
 - The three real cameras support the viewpoint partialization axis end to end.
 
-## 4. Datasets downloaded (verified)
+## 5. Datasets downloaded (verified)
 
 Stored under `datasets/` (gitignored), 1.7 GB total. Downloaded with a standalone script
 replicating `robocasa.scripts.download_datasets` path logic, because robocasa was not
@@ -132,7 +167,7 @@ Other measured sizes, for planning: `TurnOnMicrowave` 0.34 GB, `OpenDrawer` 0.48
 ORACLE-tier (PLAN.md section 9): legitimate for analysis and for constructing controlled
 conditions such as phase-drop partialization, never as method input.
 
-## 5. Code written
+## 6. Code written
 
 All of it reads the schema from disk; no camera name, resolution or action dimension is
 hard-coded (PLAN.md section 6.1).
@@ -186,7 +221,7 @@ Three design decisions worth keeping in mind:
    action-free video cannot quietly come to depend on robot supervision or privileged
    simulator state.
 
-## 6. Tests (verified passing)
+## 7. Tests (verified passing)
 
 **221 passed** across `test_camera_subset`, `test_analysis`, `test_dataset`,
 `test_model_forward`, `test_lerobot_meta`, `test_tiers` and `test_partialization`. They run
@@ -198,7 +233,7 @@ Run them with:
 /home/pavt1024/miniconda3/envs/robocasa/bin/python -m pytest tests -q
 ```
 
-## 7. Bugs found and fixed while building
+## 8. Bugs found and fixed while building
 
 Recorded because each produced a plausible-looking wrong answer rather than an error.
 
@@ -227,7 +262,7 @@ Recorded because each produced a plausible-looking wrong answer rather than an e
   **90%**, above the observed value. The entire headroom was selection bias. Now reported
   against that null (harness contract C11).
 
-## 8. Experiments run (earlier multi-view study)
+## 9. Experiments run (earlier multi-view study)
 
 Kept as measured facts. PLAN.md section 13.6 is explicit that these must not define the
 research problem.
@@ -285,7 +320,7 @@ recoverable from the image, so a vision-only policy there cannot beat the condit
 however many cameras it gets. `StackBowlsCabinet` has **1** instruction for all 515
 episodes. Every run now prints its instruction count and warns when it exceeds one.
 
-## 9. Open items
+## 10. Open items
 
 1. **Method design** — PLAN.md section 14 puts the P2C-v0 specification before any further
    implementation, and section 13.5 forbids scaling before a falsifiable local signal.
@@ -296,6 +331,8 @@ episodes. Every run now prints its instruction count and warns when it exceeds o
    conditions.
 4. Diffusion Policy configs are generated from upstream but **never executed**; PLAN.md
    section 7.2 assigns that to the remote server (local GPU is 4 GB, guidance is 24 GB+).
+   Rollout *evaluation* is now known to work locally (section 3), so small-scale
+   closed-loop checks are possible even though training is not.
 5. LIBERO is **not installed**, deliberately. PLAN.md section 13.2 forbids installing it
    into this environment, and its pins (`numpy==1.22.4`, `robosuite==1.4.0`, `gym==0.25.2`,
    Python 3.8) are incompatible. It needs a separate env when Stage 3 arrives.
