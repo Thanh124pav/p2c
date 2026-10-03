@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Visualise one episode across all camera views (SETUP.md section 6).
+"""Visualise one episode across all camera views (PLAN.md Stage 2).
 
 Produces a side-by-side strip of every synchronised view so the acceptance criterion
 "all camera frames for timestep t correspond to the same timestep" can be checked by eye,

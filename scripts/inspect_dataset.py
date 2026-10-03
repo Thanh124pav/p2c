@@ -1,7 +1,7 @@
 #!/usr/bin/env python
-"""Stage 0 of SETUP.md: verify the RoboCasa365 dataset schema programmatically.
+"""Stage 0 of PLAN.md: verify the RoboCasa365 dataset schema programmatically.
 
-Prints every field SETUP.md section 6 requires, and checks the acceptance criteria that
+Prints every field PLAN.md Stage 2 requires, and checks the acceptance criteria that
 matter for the P2C study: that every camera stream loads, that all cameras share a frame
 count with the action stream (a necessary condition for synchronisation), and that
 episode boundaries are consistent.
@@ -76,7 +76,7 @@ def inspect(root: Path, episode: int, probe_videos: bool) -> dict:
     meta = DatasetMeta.load(root)
     report: dict = {"dataset_path": str(root)}
 
-    # ---- the fields SETUP.md section 6 asks for ----
+    # ---- the fields PLAN.md Stage 2 asks for ----
     report["dataset_name"] = meta.info.get("robot_type") or root.parent.parent.name
     report["codebase_version"] = meta.info.get("codebase_version")
     report["num_episodes"] = meta.num_episodes
@@ -121,7 +121,7 @@ def inspect(root: Path, episode: int, probe_videos: bool) -> dict:
             videos[key] = _probe_video(meta.video_path(ep, key))
     report["videos"] = videos
 
-    # ---- acceptance criteria (SETUP.md section 6) ----
+    # ---- acceptance criteria (PLAN.md Stage 2) ----
     checks: dict[str, object] = {}
     checks["has_multiple_cameras"] = len(meta.image_keys) >= 2
     checks["all_camera_video_dirs_exist"] = all(
@@ -155,7 +155,7 @@ def inspect(root: Path, episode: int, probe_videos: bool) -> dict:
 
     # Genuine per-frame stage labels, not episode-level language. Reported as INFO
     # rather than a hard check: atomic tasks legitimately lack these, and only the
-    # stage analysis of SETUP.md section 11 needs them.
+    # stage analysis of PLAN.md section 9 needs them.
     checks["stage_annotation_keys"] = meta.stage_annotation_keys or "none (atomic task?)"
     report["checks"] = checks
     return report
@@ -216,7 +216,7 @@ def _fmt(report: dict) -> str:
             L.append(f"  {k}")
     else:
         L.append("  (none — expected for atomic tasks. The stage-dependence analysis of")
-        L.append("   SETUP.md sections 10-11 requires a target *composite* task dataset.)")
+        L.append("   PLAN.md section 9 requires a target *composite* task dataset.)")
 
     pq_info = g("parquet") or {}
     L.append("")
@@ -239,7 +239,7 @@ def _fmt(report: dict) -> str:
                 )
 
     L.append("")
-    L.append("--- acceptance checks (SETUP.md section 6) ---")
+    L.append("--- acceptance checks (PLAN.md Stage 2) ---")
     for k, v in (g("checks") or {}).items():
         if isinstance(v, bool):
             mark = "PASS" if v else "FAIL"

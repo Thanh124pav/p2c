@@ -9,7 +9,7 @@
 #    matter how many cameras it gets. A flat loss on that task says nothing about view
 #    sufficiency.
 # 2. **Per-frame stage labels.** Only target composite datasets carry
-#    `annotation.human.subtask_stage`, which SETUP.md sections 10-11 need.
+#    `annotation.human.subtask_stage`, which PLAN.md section 9 need.
 # 3. **Manipulation-heavy.** Occlusion and fine alignment are where complementary evidence
 #    should matter; a navigation task is mostly gross motion.
 #
@@ -29,7 +29,7 @@ use_state: true
 
 # --- model ---
 # Shared encoder + mean fusion => parameter count independent of the view count
-# (SETUP.md section 12, Control B).
+# (harness contract (docs/harness_contract.md) C2).
 encoder: tiny_cnn
 fusion: mean
 feat_dim: 256
@@ -49,7 +49,7 @@ aug_pad: 4
 seed: 0
 # 20, not more: every arm of the atomic-task run reached its best validation loss by
 # epoch 19, and this cache has 6x the data, so a longer schedule buys overfitting rather
-# than signal. SETUP.md section 8 wants a fast falsification test, not a tuned policy.
+# than signal. PLAN.md Stage 2 wants a fast falsification test, not a tuned policy.
 epochs: 20
 batch_size: 64
 lr: 3.0e-4

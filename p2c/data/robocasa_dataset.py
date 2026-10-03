@@ -1,10 +1,20 @@
-"""``CameraSubsetDataset``: the torch Dataset behind every P2C view ablation.
+"""``CameraSubsetDataset``: a torch Dataset over cached RoboCasa trajectories.
 
-This is the abstraction SETUP.md section 7 asks for. The policy receives an image stack
-of shape ``[V, 3, H, W]`` and never learns which cameras produced it, so a single model
-and a single training loop serve the 1-, 2- and 3-view conditions.
+The consumer receives an image stack of shape ``[V, 3, H, W]`` and never learns which
+cameras produced it, so one model and one training loop serve the 1-, 2- and 3-view
+conditions. Viewpoint is one partialization axis among several
+(:mod:`p2c.data.partialization`); PLAN.md section 13.6 warns against letting it define the
+research problem.
 
-What is held fixed across conditions, per SETUP.md section 7:
+**Information tiers.** Construct with a ``tier`` (PLAN.md section 9) and the sample dict
+contains only fields that tier may read. This is enforcement, not documentation: a dataset
+built at ``Tier.METHOD`` physically cannot hand out actions or stage labels, so a method
+meant to work on action-free Internet video cannot quietly come to depend on robot
+supervision or privileged simulator state. The default is ``Tier.ORACLE`` because the
+analysis path legitimately needs everything.
+
+What is held fixed across conditions, per the harness contract
+(docs/harness_contract.md):
 
 1. same demonstrations  - the episode list comes from the shared cache;
 2. same train/val split - computed by :meth:`FrameCache.split_episodes`, which depends
@@ -28,6 +38,7 @@ from torch.utils.data import Dataset
 
 from p2c.data.camera_subset import CameraRoles, ViewCondition, build_condition
 from p2c.data.frame_cache import FrameCache
+from p2c.data.tiers import Tier, tier_of
 
 
 class CameraSubsetDataset(Dataset):
@@ -43,7 +54,7 @@ class CameraSubsetDataset(Dataset):
         Episode indices to draw from. Pass the output of
         :meth:`FrameCache.split_episodes` so train and val stay disjoint.
     camera_dropout:
-        Stochastic view dropout, SETUP.md section 12 Control C. Only applied when the
+        Stochastic view dropout, harness contract C9. Only applied when the
         condition itself does not already set it.
     n_obs_steps:
         Frames of history per view. Clamped at the episode start, never crossing an
@@ -67,6 +78,7 @@ class CameraSubsetDataset(Dataset):
         seed: int = 0,
         primary_camera: str | None = None,
         normalize_actions: bool = True,
+        tier: Tier = Tier.ORACLE,
     ):
         self.cache = cache if isinstance(cache, FrameCache) else FrameCache(cache)
         self.roles = CameraRoles.from_discovered(
@@ -84,6 +96,7 @@ class CameraSubsetDataset(Dataset):
         self.n_obs_steps = max(1, int(n_obs_steps))
         self.action_horizon = max(1, int(action_horizon))
         self.normalize_actions = normalize_actions
+        self.tier = Tier(tier)
 
         if not self.episodes:
             raise ValueError("CameraSubsetDataset got an empty episode list")
@@ -167,6 +180,12 @@ class CameraSubsetDataset(Dataset):
             sample["stage"] = torch.tensor(int(self.cache.stage[g]), dtype=torch.int32)
         else:
             sample["stage"] = torch.tensor(-1, dtype=torch.int32)
+
+        # Drop anything above the declared tier. Filtering here rather than trusting the
+        # consumer is the point: a Tier.METHOD dataset cannot leak actions or stage labels
+        # into something that is supposed to work on action-free video (PLAN.md section 9).
+        if self.tier is not Tier.ORACLE:
+            sample = {k: v for k, v in sample.items() if tier_of(k) <= self.tier}
         return sample
 
     # ---------------- introspection / logging ----------------
@@ -183,7 +202,7 @@ class CameraSubsetDataset(Dataset):
         return (self.num_views, self.n_obs_steps, 3, r, r)
 
     def describe(self) -> dict:
-        """Everything a run needs to log about its camera configuration (section 16)."""
+        """Everything a run needs to log about its camera configuration (contract C12)."""
         return {
             "condition": self.condition.name,
             "notes": self.condition.notes,
@@ -207,13 +226,15 @@ class CameraSubsetDataset(Dataset):
             "action_horizon": self.action_horizon,
             "n_obs_steps": self.n_obs_steps,
             "seed": self.seed,
+            "tier": self.tier.name,
+            "fields_emitted": sorted(self[0].keys()) if len(self) else [],
         }
 
     def camera_usage(self, max_samples: int = 2000) -> dict[str, int]:
         """Count how often each camera is actually selected.
 
         Used to verify that a stochastic condition really does spread over its pool, and
-        to record the realised camera mix for every experiment (section 7, requirement 7).
+        to record the realised camera mix for every experiment (contract C3).
         """
         counts = {c: 0 for c in self.cache.cameras}
         step = max(1, len(self) // max_samples)

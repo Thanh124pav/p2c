@@ -1,12 +1,12 @@
-"""Seeding and determinism, per SETUP.md section 17.
+"""Seeding and determinism, per harness contract (docs/harness_contract.md) C6.
 
 Seeds ``random``, ``numpy``, ``torch`` and ``torch.cuda``. Dataset sampling and camera
 randomisation are *not* seeded here: they are made deterministic structurally, by hashing
 ``(seed, episode, frame)`` in :mod:`p2c.data.camera_subset`, so they do not depend on
 global RNG state or on dataloader worker scheduling.
 
-:func:`nondeterminism_report` records what remains nondeterministic, which section 17
-explicitly asks for rather than silently assuming bit-exactness.
+:func:`nondeterminism_report` records what remains nondeterministic, rather than
+silently assuming bit-exactness.
 """
 
 from __future__ import annotations
@@ -60,7 +60,7 @@ def worker_init_fn(worker_id: int) -> None:
 
 
 def nondeterminism_report(mixed_precision: bool = False) -> list[str]:
-    """Operations that may still vary run to run, for the record (section 17)."""
+    """Operations that may still vary run to run, recorded in each run's metadata."""
     notes = [
         "cuDNN convolution backward kernels may be nondeterministic unless "
         "torch.use_deterministic_algorithms(True) is set; we set cudnn.deterministic "

@@ -5,7 +5,7 @@ That placement is deliberate:
 
 * the Dataset stays **deterministic**, so validation frames are byte-identical across view
   conditions and their per-sample errors can be joined frame by frame
-  (SETUP.md sections 7 and 13);
+  (harness contract (docs/harness_contract.md) C1-C8);
 * augmentation therefore touches training only, and never perturbs the numbers the
   comparison is read from.
 

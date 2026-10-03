@@ -1,15 +1,16 @@
 #!/usr/bin/env python
-"""Train the tiny BC baseline for one camera condition (SETUP.md section 8).
+"""Train the tiny BC baseline for one camera condition (PLAN.md Stage 2).
 
 This is the fast falsification test, not a paper result. One invocation trains exactly one
 view condition; ``scripts/run_view_ablation.sh`` sweeps them with everything else held
 fixed.
 
-What the run writes (SETUP.md section 16): ``meta.json`` with git hash, config, dataset
+What the run writes (harness contract (docs/harness_contract.md) C12): ``meta.json``
+with git hash, config, dataset
 identity, camera subset, parameter count and resolution; ``metrics.jsonl`` / ``.csv`` with
 the loss history; ``val_per_sample.npz`` with per-frame validation errors keyed by
-(episode, frame) — the raw material for the stage breakdown of section 11 and the
-complementarity metric of section 13; ``best.pt``; and ``console.log``.
+(episode, frame) — the raw material for the per-stage breakdown and the complementarity
+metric; ``best.pt``; and ``console.log``.
 
 Usage::
 
@@ -186,7 +187,7 @@ def main() -> int:
                    help="disable training-time random-shift augmentation")
     p.add_argument("--aug-pad", type=int, default=None, help="random shift in pixels")
     p.add_argument("--overfit", type=int, default=None,
-                   help="train on N samples only (SETUP.md section 18 overfit test)")
+                   help="train on N samples only (PLAN.md Stage 2 overfit test)")
     p.add_argument("--output-root", type=str, default=None)
     p.add_argument("--tag", type=str, default=None, help="suffix for the run name")
     p.add_argument("--wandb", action="store_true", default=None)
@@ -223,7 +224,7 @@ def main() -> int:
         action_horizon=int(cfg["action_horizon"]),
     )
 
-    # Overfit mode (section 18): a contiguous slice, so the same frames are used for
+    # Overfit mode: a contiguous slice, so the same frames are used for
     # training and validation and the loss must approach zero if the model can learn.
     overfit_n = cfg["overfit"]
     if overfit_n:
@@ -289,7 +290,7 @@ def main() -> int:
               f"(fusion={cap['fusion_name']})")
         if not cap["view_count_independent"]:
             print("  WARNING: this fusion scales parameters with the view count, so this "
-                  "run cannot satisfy SETUP.md section 12 Control B.")
+                  "run cannot satisfy harness contract C2.")
         print(f"actions   : dim={cache.action_dim} groups={list(cache.action_groups)}")
 
         # Reference line: predicting the training-set mean action. A run that does not

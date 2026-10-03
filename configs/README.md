@@ -2,14 +2,14 @@
 
 ## One config, many arms
 
-SETUP.md section 5 sketches `bc_single_view.yaml` and `bc_multi_view.yaml` as separate
-files. This directory deliberately does **not** have them.
+There is deliberately no `bc_single_view.yaml` / `bc_multi_view.yaml` pair here, even
+though per-arm config files are the obvious layout.
 
-Section 7 requires the same demonstrations, split, preprocessing, action targets and
-optimisation settings across every camera condition. Two config files for two arms gives
-those settings two places to live, and the first time someone tunes the learning rate in
-one and not the other, the ablation silently stops being a controlled comparison — while
-still producing a clean-looking table.
+Rule C1 of the [harness contract](../docs/harness_contract.md) requires the same
+demonstrations, split, preprocessing, targets and optimiser settings across every arm of a
+comparison. Two config files for two arms gives those settings two places to live, and the
+first time someone tunes the learning rate in one and not the other, the comparison
+silently stops being controlled — while still producing a clean-looking table.
 
 So there is one config per *experiment setting*, and the arm is chosen on the command line:
 
@@ -27,7 +27,7 @@ recoverable after the fact.
 | File | Purpose |
 |---|---|
 | `local_debug.yaml` | The shared ablation setting, sized for a 4 GB GPU and 5.8 GB RAM. |
-| `overfit.yaml` | SETUP.md section 18 overfit test: high LR, no weight decay, few samples. |
+| `overfit.yaml` | PLAN.md Stage 2 overfit test: high LR, no weight decay, few samples. |
 | `diffusion_policy/` | Generated remote-stage task configs. See below. |
 
 ## `diffusion_policy/`
@@ -37,7 +37,7 @@ filtering `shape_meta.obs` down to a camera subset. **Do not edit by hand** — 
 instead, so the arms stay identical to upstream in every respect except the cameras.
 
 These have **not been run**. This machine has a 4 GB GPU and the official guidance is
-24 GB or more for Diffusion Policy training, so SETUP.md section 20 applies: prepare, do
+24 GB or more for Diffusion Policy training, so PLAN.md section 7.2 applies: prepare, do
 not launch. Each generated file lists the fields to check before a first remote run
 (`dataset_soup`, `env_runner.dataset_path`, `batch_size`).
 

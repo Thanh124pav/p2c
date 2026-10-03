@@ -1,7 +1,7 @@
 """Schema discovery for RoboCasa365 LeRobot datasets.
 
-SETUP.md section 6 requires that dataset properties be verified programmatically rather
-than assumed, and section 3.1 forbids hard-coding camera names. Everything in this module
+PLAN.md Stage 2 requires that dataset properties be verified programmatically rather
+than assumed, and camera names are never hard-coded. Everything in this module
 is therefore read off disk: nothing about camera names, resolutions or action dimensions
 is baked in.
 
@@ -119,7 +119,7 @@ class DatasetMeta:
 
         Note this is deliberately broad and includes things like
         ``annotation.human.task_description`` and ``task_index``, which every dataset has.
-        For the stage analysis of SETUP.md section 11, use
+        For the stage analysis of PLAN.md section 9, use
         :attr:`stage_annotation_keys` instead — a non-empty value here does *not* mean
         the dataset carries per-frame stage labels.
         """
@@ -142,7 +142,7 @@ class DatasetMeta:
         RoboCasa365 ships these only for *target composite* task datasets (README update
         7/7/2026: subtask index, atomic-skill name, stage, instruction). Atomic datasets
         have episode-level language only, so they cannot support the stage-dependence
-        analysis of SETUP.md sections 10-11.
+        analysis of PLAN.md section 9.
 
         Episode-level language keys (``task_description``, ``task_name``, ``task_index``)
         are explicitly excluded: they describe the whole episode, not the timestep.
@@ -311,7 +311,7 @@ class DatasetMeta:
         ``kind="action"``: base_motion [0,4), control_mode [4,5),
         end_effector_position [5,8), end_effector_rotation [8,11), gripper_close [11,12).
 
-        These groups are what make the per-component metrics of SETUP.md section 8
+        These groups are what make the per-component metrics of PLAN.md Stage 2
         (rotation error, gripper error) possible without guessing the layout.
         """
         if not self.modality or kind not in self.modality:
@@ -337,7 +337,8 @@ class DatasetMeta:
 
         Returns a dict with keys ``wrist`` and ``third_person``. This reads the *actual*
         discovered names; it never invents one. Used by the camera-subset layer to build
-        the named view conditions of SETUP.md section 7 without hard-coding.
+        the named view conditions of the harness contract (docs/harness_contract.md)
+        without hard-coding.
         """
         wrist, third = [], []
         for name in self.camera_names:

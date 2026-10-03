@@ -5,10 +5,10 @@ Why this exists
 ---------------
 The datasets ship 256x256 mp4 per camera. Random-access decoding during training means
 seeking inside mp4 for every sample, which is slow and, on a 5.8 GB RAM machine, awkward
-to buffer. More importantly for P2C, SETUP.md section 7 requires *identical* image
-preprocessing across every camera ablation. Decoding once into a shared cache makes that
-a structural guarantee rather than something to remember: all view conditions then read
-the same uint8 pixels at the same global frame index.
+to buffer. More importantly, harness contract C8 (docs/harness_contract.md) requires
+*identical* image preprocessing across every condition. Decoding once into a shared cache
+makes that a structural guarantee rather than something to remember: every condition then
+reads the same uint8 pixels at the same global frame index.
 
 The cache also makes camera synchronisation true by construction. Every camera's frames
 are written to the same global frame index, so view condition "primary+wrist" at index i
@@ -270,7 +270,7 @@ def build(
 
         # The stage column holds int indices into meta/tasks.jsonl, so resolve them to
         # readable labels (11/12/13/15 -> done/place/pick/navigate). Without this the
-        # per-stage table of SETUP.md section 11 is a list of bare numbers.
+        # per-stage table of PLAN.md section 9 is a list of bare numbers.
         vocab = meta.task_vocabulary()
 
         def label(v) -> str:

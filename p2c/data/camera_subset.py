@@ -1,11 +1,12 @@
-"""Camera-subset logic: the one reusable abstraction of SETUP.md section 7.
+"""Camera-subset logic: the one reusable abstraction of the harness contract
+(docs/harness_contract.md).
 
 The policy must not care whether an observation holds 1, 2 or 3 cameras, and the
 ablations must differ *only* in which camera streams are fed. This module therefore
 separates two things:
 
 * **roles** (``primary``, ``secondary``, ``wrist``) resolved against the camera names
-  actually discovered in the dataset — never hard-coded (SETUP.md section 3.1);
+  actually discovered in the dataset — never hard-coded (PLAN.md section 6.1);
 * **view conditions** (``single_primary``, ``primary+wrist``, ``random_two``, ...) defined
   as a fixed number of *slots*, each slot filled by either a fixed camera or a
   deterministic random draw.
@@ -13,7 +14,7 @@ separates two things:
 Fixing the slot count per condition is what keeps the "more pixels" controls honest: a
 random-view condition has the same number of image tensors per sample as the fixed
 complementary pair it is compared against, and the sample count never changes
-silently (SETUP.md section 7, requirement 7).
+silently (harness contract C3).
 
 This module is pure Python over camera-name lists, so it is testable without a dataset
 or a GPU.
@@ -152,7 +153,7 @@ class ViewCondition:
         """Pick the camera for every slot. Deterministic in (seed, episode, frame).
 
         Determinism does not go through global RNG state, so a dataloader with several
-        workers, or a resumed run, yields exactly the same cameras (SETUP.md section 7,
+        workers, or a resumed run, yields exactly the same cameras (the harness contract,
         requirement 6).
         """
         out = []
@@ -174,7 +175,7 @@ class ViewCondition:
     def dropout_mask(
         self, episode_index: int, frame_index: int, seed: int
     ) -> list[bool]:
-        """Per-slot keep mask for camera dropout (SETUP.md section 12, Control C).
+        """Per-slot keep mask for camera dropout (harness contract C9).
 
         At least one view is always kept, so the policy never sees an empty observation.
         """
@@ -219,7 +220,7 @@ def _stable_unit(key: tuple) -> float:
 
 # ---------------------------------------------------------------- registry
 
-#: Condition names required by SETUP.md section 7, plus the controls of section 12.
+#: Condition names required by harness contract C1-C9.
 CONDITION_NAMES = (
     "single_primary",
     "single_wrist",
@@ -241,15 +242,15 @@ def build_condition(
 ) -> ViewCondition:
     """Build a named view condition against the dataset's real camera names.
 
-    Named conditions (SETUP.md section 7 and the B0-B4 baselines of section 9):
+    Named conditions, with the role each plays in a controlled comparison:
 
     ``single_primary``      B0, the partial observation
     ``single_wrist``        B1, the alternative single view
     ``primary+wrist``       B2, the fixed complementary pair
     ``all_views``           B3, the full-view oracle
     ``random_two``          B4, primary plus a random second view
-    ``primary+duplicate``   Control D: the same camera twice (section 12)
-    ``primary+wrist_dropout`` Control C: complementary pair with view dropout
+    ``primary+duplicate``   control: the same camera twice, no new information
+    ``primary+wrist_dropout`` control: complementary pair with stochastic view dropout
     """
     drop = 0.0 if camera_dropout is None else camera_dropout
 
@@ -285,8 +286,8 @@ def build_condition(
             random_scope,
             # Because the draw is deterministic in (seed, episode, frame), a given frame
             # keeps the same second view across epochs: this is a random *assignment*,
-            # not per-epoch resampling. That is what SETUP.md section 7 requirement 6
-            # asks for, and it is the right semantics for Control A, which asks whether
+            # not per-epoch resampling. That is what the harness contract requirement 6
+            # asks for, and it is the right semantics for the random-view control, which asks whether
             # *which* view is added matters while holding the view count fixed. Setting
             # random_scope="sample" with a per-epoch reseed would instead make this a
             # view-augmentation condition, a different experiment.
@@ -298,12 +299,12 @@ def build_condition(
             (Slot(fixed=roles.primary), Slot(fixed=roles.primary)),
             drop,
             random_scope,
-            "Control D: duplicate view, no new information",
+            "control: duplicate view, carries no new information",
         )
     if name == "primary+wrist_dropout":
         d = 0.5 if camera_dropout is None else camera_dropout
         return ViewCondition(name, fixed("primary", "wrist"), d, random_scope,
-                             "Control C: complementary pair with view dropout")
+                             "control: complementary pair with stochastic view dropout")
 
     # Fall back to an explicit comma-separated camera/role list, e.g. "primary,wrist".
     if "," in name or name in ("primary", "secondary", "wrist"):

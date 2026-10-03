@@ -1,8 +1,15 @@
 # P2C — Progress and Verified Facts
 
-Last updated 2026-10-03. This file records what has been **verified on this machine**, so a
-later session does not re-investigate. Claims here were checked by running something;
-where something is assumed or unverified, it says so.
+Last updated 2026-10-03. [PLAN.md](PLAN.md) section 10 names this file the source of truth
+for machine-specific facts: verified package versions, downloaded datasets, passing tests,
+known environment limits. It records what has been **verified on this machine**, so a later
+session does not re-investigate. Claims here were checked by running something; where
+something is assumed or unverified, it says so.
+
+The research question lives in [PLAN.md](PLAN.md), not here. Results below from the earlier
+multi-view study are kept because they are measured facts about this machine and this data,
+not because they define the direction — PLAN.md section 13.6 is explicit that the multi-view
+implementation must not lock the research problem into view selection.
 
 ---
 
@@ -66,12 +73,12 @@ Known gaps from this approach, all harmless for P2C:
 - `numba` 0.68.0 and `scipy` 1.17.1 differ from robocasa's pins; neither is asserted and
   nothing has failed because of it.
 
-## 3. Key finding: the MVP needs no renderer
+## 3. Key finding: the local data path needs no renderer
 
 RoboCasa365 datasets are LeRobot format and **ship mp4 already rendered for three
 synchronised cameras**. Verified by reading `meta/info.json` and decoding the mp4 directly:
 
-| Camera | Role in P2C | Verified shape |
+| Camera | Role in the view-partialization axis | Verified shape |
 |---|---|---|
 | `robot0_agentview_left` | primary | 256x256x3, 20 fps |
 | `robot0_agentview_right` | secondary | 256x256x3, 20 fps |
@@ -79,11 +86,11 @@ synchronised cameras**. Verified by reading `meta/info.json` and decoding the mp
 
 Consequences:
 
-- Stages 0–2 of SETUP.md read parquet + mp4 and **never call MuJoCo**, so the missing
-  Vulkan/OSMesa does not block the data study.
-- Rendering is needed only for policy *rollout* evaluation (`eval_robocasa.py`), which is
-  the remote Diffusion Policy stage anyway.
-- The three real cameras cover every view condition in SETUP.md section 7.
+- The local data path reads parquet + mp4 and **never calls MuJoCo**, so the missing
+  Vulkan/OSMesa does not block Stage 2 work (PLAN.md section 6.1 says the same).
+- Rendering is needed only for closed-loop *rollout* evaluation, which PLAN.md section 7.2
+  assigns to the remote server anyway.
+- The three real cameras support the viewpoint partialization axis end to end.
 
 ## 4. Datasets downloaded (verified)
 
@@ -121,26 +128,30 @@ Other measured sizes, for planning: `TurnOnMicrowave` 0.34 GB, `OpenDrawer` 0.48
 `NavigateKitchen` (atomic) carries **none** — only episode-level
 `annotation.human.task_description` / `task_name` / `task_index`.
 
-**So the stage-dependence analysis of SETUP.md sections 10–11 requires a target composite
-task.** Atomic tasks can show the overall phenomenon but not its stage structure.
+**So any per-stage analysis requires a target composite task.** Stage labels are
+ORACLE-tier (PLAN.md section 9): legitimate for analysis and for constructing controlled
+conditions such as phase-drop partialization, never as method input.
 
 ## 5. Code written
 
 All of it reads the schema from disk; no camera name, resolution or action dimension is
-hard-coded (SETUP.md sections 3.1 and 6).
+hard-coded (PLAN.md section 6.1).
 
 ```
 p2c/data/lerobot_meta.py        LeRobot schema discovery, modality groups, camera roles
 p2c/data/frame_cache.py         memmap cache reader, deterministic split, norm statistics
 p2c/data/camera_subset.py       roles, slots, view conditions, hash-based determinism
-p2c/data/robocasa_dataset.py    CameraSubsetDataset + build_train_val
+p2c/data/partialization.py      viewpoint / temporal / phase / occlusion partialization
+p2c/data/tiers.py               PLAN.md section 9 information tiers, enforced
+p2c/data/transforms.py          training-only random-shift augmentation
+p2c/data/robocasa_dataset.py    CameraSubsetDataset + build_train_val, tier-filtered
 p2c/models/view_encoder.py      shared tiny CNN; optional frozen ResNet
 p2c/models/fusion.py            mean / attn (view-count independent), concat (warns)
 p2c/models/tiny_bc.py           policy, losses, per-group and per-sample metrics
 p2c/analysis/results.py         load runs, join per-sample errors on shared frames
 p2c/analysis/stage_metrics.py   Delta_view(g), paired bootstrap, heterogeneity test
 p2c/analysis/complementarity.py C(v|p), oracle selection headroom
-p2c/analysis/kill_criteria.py   automated verdict on SETUP.md section 21
+p2c/analysis/kill_criteria.py   automated falsification verdict + validity precondition
 p2c/analysis/visualization.py   improved-frame contact sheet, stage and histogram plots
 p2c/utils/paths.py              dataset resolution (registry if available, else glob)
 p2c/utils/seeding.py            seeding + explicit nondeterminism report
@@ -150,29 +161,36 @@ scripts/visualize_episode.py    synchronised multi-view grid / video
 scripts/build_frame_cache.py    decode mp4 once into a uint8 memmap cache
 scripts/train_local_bc.py       train one view condition
 scripts/eval_local_bc.py        evaluate a checkpoint, incl. cross-condition
-scripts/run_view_ablation.sh    sweep B0-B4 + controls with everything else fixed
-scripts/summarize_view_ablation.py  tables, CSVs, figures, complementarity, kill criteria
-configs/local_debug.yaml        shared config; only `views` differs between arms
-configs/overfit.yaml            SETUP.md section 18 overfit test
-tests/                          conftest synthetic cache + 3 test modules
+scripts/run_view_ablation.sh    sweep conditions with everything else held fixed
+scripts/summarize_view_ablation.py  tables, CSVs, figures, complementarity, verdict
+scripts/make_dp_configs.py      generate Diffusion Policy camera-subset configs
+configs/local_debug.yaml        shared config; only the condition differs between arms
+configs/composite.yaml          composite-task setting (stage labels available)
+configs/overfit.yaml            PLAN.md Stage 2 overfit test
+docs/harness_contract.md        C1-C12: the controlled-comparison rules, enforced in code
+tests/                          synthetic-cache conftest + 6 test modules
 ```
 
-Two design decisions worth keeping in mind:
+Three design decisions worth keeping in mind:
 
 1. **The frame cache is not just a speed optimisation.** Decoding mp4 once makes
-   "identical preprocessing across conditions" (section 7.3) structural, and makes camera
-   synchronisation true by construction, since all cameras write to the same global frame
-   index.
+   "identical preprocessing across conditions" structural (harness contract C8), and makes
+   camera synchronisation true by construction, since all cameras write to the same global
+   frame index.
 2. **Capacity matching is automatic.** One shared encoder plus `mean`/`attn` fusion makes
-   the trainable parameter count independent of the view count, so section 12 Control B
-   holds by construction rather than by later adjustment. `concat` fusion is available but
-   warns and is recorded as violating the control.
+   the trainable parameter count independent of the view count, so contract C2 holds by
+   construction rather than by later adjustment. `concat` fusion is available but warns and
+   is recorded as violating it.
+3. **Tiers are enforced, not documented.** `CameraSubsetDataset(..., tier=Tier.METHOD)`
+   physically omits actions, proprioception and stage labels, so a method intended for
+   action-free video cannot quietly come to depend on robot supervision or privileged
+   simulator state.
 
 ## 6. Tests (verified passing)
 
-63 passed: `tests/test_camera_subset.py` (32) and `tests/test_analysis.py` (31).
-`tests/test_dataset.py` and `tests/test_model_forward.py` need torch and have **not been
-run yet**.
+**221 passed** across `test_camera_subset`, `test_analysis`, `test_dataset`,
+`test_model_forward`, `test_lerobot_meta`, `test_tiers` and `test_partialization`. They run
+against a synthetic cache, so they need neither the downloaded datasets nor a GPU.
 
 Run them with:
 
@@ -182,27 +200,103 @@ Run them with:
 
 ## 7. Bugs found and fixed while building
 
+Recorded because each produced a plausible-looking wrong answer rather than an error.
+
+**Schema discovery**
+
 - `has_stage_annotations` initially passed on atomic tasks, because it matched
   `task_index` and `task_description`. Split into a broad `annotation_keys` and a strict
-  `stage_annotation_keys`, and demoted the hard check to INFO (atomic tasks legitimately
-  lack stage labels).
+  `stage_annotation_keys`.
 - The strict filter then wrongly *excluded* `annotation.human.subtask_name`, because
   `"subtask_name".endswith("task_name")` is true. Fixed to compare the final dotted
   component exactly.
+- Stage labels came out as bare indices (11/12/13/15). They index `meta/tasks.jsonl`;
+  resolved to `done` / `place` / `pick` / `navigate`.
 - `capacity_report()` had a duplicate `"fusion"` key, so the parameter count was silently
   overwritten by the fusion name.
 
-## 8. Open items
+**Statistics — the two that mattered**
 
-1. Finish the torch install; then run `tests/test_dataset.py` and
-   `tests/test_model_forward.py`.
-2. Install `pyarrow`, `pyyaml`, `matplotlib`, `pandas` (needed by the cache builder,
-   configs and figures). `pyarrow` is what currently makes `inspect_dataset.py` skip the
-   parquet probe.
-3. Build a frame cache and run the SETUP.md section 18 overfit test **before** any
-   ablation.
-4. Run the ablation on an atomic task first (cheap), then on `StackBowlsCabinet` for the
-   stage analysis.
-5. Not yet started, and correctly gated by SETUP.md: B5 learned view selection, the VISTA
-   baseline, the camera-pose-conditioned baseline (kill criterion 6 cannot be evaluated
-   without it), and the remote Diffusion Policy configs.
+- *Assumed* the predict-the-mean baseline for normalised actions was exactly 1.0, and
+  reported that models "learned nothing" at val_mse ~0.95. The **measured** baseline was
+  1.123, so those models were 14% better than chance. Baselines are now computed from the
+  cache, never assumed, and reported with every run.
+- Oracle per-frame selection headroom read **32%**, which looked like strong evidence for
+  building a view selector. Taking a per-frame minimum over K noisy models is biased
+  downwards even with no real structure: a permutation null put the selection-bias floor at
+  **90%**, above the observed value. The entire headroom was selection bias. Now reported
+  against that null (harness contract C11).
+
+## 8. Experiments run (earlier multi-view study)
+
+Kept as measured facts. PLAN.md section 13.6 is explicit that these must not define the
+research problem.
+
+**Gate passed.** Overfit test: 0.444 -> 0.0054 on 32 samples, so the pipeline learns.
+
+**`NavigateKitchen`** (atomic, 40 episodes, 84x84, 1 seed). Predict-the-mean baseline
+1.123. Best condition `primary+wrist` 0.962. Falsification criterion 1 **triggered**: the
+best multi-view condition beat the best *single* view by only 1.9%, CI [-0.021, 0.059],
+p=0.347. The apparent 11.9% gain over the primary view was not "two views beat one" — it
+was "the wrist view is simply better for this task". Controls behaved correctly: a random
+second view recovered 42% of the pair's gain (p=0.001), and a duplicated view was *worse*
+than the single view.
+
+**`StackBowlsCabinet`** (composite, 120 episodes, 96x96, 1 seed, 12 epochs, all 8 arms).
+Predict-the-mean baseline 0.577; every arm beats it (best 0.413, **28.6%** better), so the
+experiment has signal and the verdict below is interpretable.
+
+| condition | val_mse | vs primary |
+|---|---|---|
+| `random_two` (control) | 0.4137 | +2.4% |
+| `primary+wrist_dropout` (control) | 0.4211 | +0.7% |
+| `all_views` | 0.4221 | +0.4% |
+| `single_primary` | 0.4239 | — |
+| `primary+secondary` | 0.4252 | -0.3% |
+| `primary+duplicate` (control) | 0.4262 | -0.6% |
+| `primary+wrist` | 0.4322 | **-1.9%** |
+| `single_wrist` | 0.4392 | -3.6% |
+
+Falsification criterion 1 **triggered**: the best multi-view arm beats the best single view
+by 2.3%, under the 5% threshold. More pointedly, the fixed complementary pair
+`primary+wrist` is **significantly worse** than the single primary view (paired delta
+-2.6%, CI [-0.019, -0.004], p=0.004). Per stage, the harm is largest and only significant
+on `pick` (-3.8%); the permutation test says the effect genuinely varies by stage
+(p=0.027), but what varies is harm, not benefit.
+
+The only arms that helped at all were the two *stochastic* ones (`random_two`,
+`primary+wrist_dropout`). That is the signature of regularisation rather than information,
+which is exactly what the dropout control exists to detect.
+
+**A confound I introduced, not yet ruled out.** Mean fusion averages view features, so an
+uninformative view dilutes a useful one — the architecture can make a second view harmful
+whether or not it carries complementary information. Mean fusion was chosen because it
+makes capacity matching exact (C2), but `attn` fusion is equally capacity-matched and can
+*ignore* a view. **These negative results are therefore partly confounded with the fusion
+choice, and an `attn` rerun is needed before treating them as evidence about
+complementarity.**
+
+Oracle per-frame selection again showed nothing: raw headroom 33.1% against a
+selection-bias floor of 86.0%, so the apparent headroom is entirely noise.
+
+**Task choice is a real confound.** `NavigateKitchen` spreads 500 episodes over **14**
+language instructions ("navigate to the sink" / "to the stove" / ...) that are not
+recoverable from the image, so a vision-only policy there cannot beat the conditional mean
+however many cameras it gets. `StackBowlsCabinet` has **1** instruction for all 515
+episodes. Every run now prints its instruction count and warns when it exceeds one.
+
+## 9. Open items
+
+1. **Method design** — PLAN.md section 14 puts the P2C-v0 specification before any further
+   implementation, and section 13.5 forbids scaling before a falsifiable local signal.
+   Nothing below should start first.
+2. Partialization along the temporal, phase and occlusion axes is implemented and tested
+   but has not been run end-to-end through training; only the viewpoint axis has.
+3. Multi-seed runs, if the viewpoint axis is ever revisited. One seed cannot separate the
+   conditions.
+4. Diffusion Policy configs are generated from upstream but **never executed**; PLAN.md
+   section 7.2 assigns that to the remote server (local GPU is 4 GB, guidance is 24 GB+).
+5. LIBERO is **not installed**, deliberately. PLAN.md section 13.2 forbids installing it
+   into this environment, and its pins (`numpy==1.22.4`, `robosuite==1.4.0`, `gym==0.25.2`,
+   Python 3.8) are incompatible. It needs a separate env when Stage 3 arrives.
+6. `tianshou` and `lerobot` are absent from the robocasa env by choice; see section 2.

@@ -1,4 +1,4 @@
-"""Tests for the camera-subset logic (SETUP.md section 18, dataset tests).
+"""Tests for the camera-subset logic (PLAN.md Stage 2, dataset tests).
 
 These run without a dataset or a GPU: the module under test is pure logic over camera
 names, which is deliberate, because this is where a silent mistake would invalidate every
@@ -124,7 +124,7 @@ def test_unknown_condition_is_rejected(roles):
 
 
 def test_random_camera_sampling_is_deterministic_under_fixed_seed(roles):
-    """SETUP.md section 7, requirement 6."""
+    """harness contract (docs/harness_contract.md) C6."""
     cond = build_condition("random_two", roles)
     first = [cond.select(ep, fr, seed=0) for ep in range(5) for fr in range(10)]
     second = [cond.select(ep, fr, seed=0) for ep in range(5) for fr in range(10)]
@@ -181,7 +181,7 @@ def test_bad_random_scope_is_rejected(roles):
 
 
 def test_duplicate_control_feeds_the_same_camera_twice(roles):
-    """Control D of SETUP.md section 12 must carry no new information."""
+    """The duplicate-view control (C9) must carry no new information."""
     cond = build_condition("primary+duplicate", roles)
     cams = cond.select(3, 4, 0)
     assert cams == [roles.primary, roles.primary]

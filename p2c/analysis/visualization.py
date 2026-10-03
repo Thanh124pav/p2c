@@ -1,6 +1,6 @@
 """Rendering helpers for the analysis outputs.
 
-SETUP.md section 11 asks for "visualization of frames where multi-view improves the
+PLAN.md section 9 asks for "visualization of frames where multi-view improves the
 prediction most", calling these samples especially important for judging whether P2C is a
 real problem. :func:`render_improved_frames` produces exactly that contact sheet: one row
 per frame, one column per camera, annotated with the per-frame complementarity score.

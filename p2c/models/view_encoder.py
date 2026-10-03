@@ -1,7 +1,8 @@
 """Per-view visual encoder: small enough for a 4 GB GTX 1650.
 
 One encoder instance is *shared* across all cameras. That is the main lever for
-SETUP.md section 12 Control B: because the same weights process every view, the trainable
+harness contract (docs/harness_contract.md) C2: because the same weights process every
+view, the trainable
 parameter count of the encoder does not grow with the number of views, so a 3-view model
 is not trivially stronger than a 1-view model simply by having more capacity.
 """
@@ -58,7 +59,7 @@ class TinyCNNEncoder(nn.Module):
 
 
 class FrozenResNetEncoder(nn.Module):
-    """Optional frozen pretrained encoder (SETUP.md section 8 allows either).
+    """Optional frozen pretrained encoder, as an alternative to the tiny CNN.
 
     Frozen on purpose: it keeps VRAM low and keeps trainable capacity identical across
     view conditions. Loaded lazily so torchvision stays an optional dependency.

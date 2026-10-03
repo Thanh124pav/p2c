@@ -1,15 +1,16 @@
 """Load and join experiment results across view conditions.
 
 Every run writes per-sample validation errors keyed by ``(episode, frame)``. Because all
-conditions share one train/validation split (SETUP.md section 7, requirement 2), the same
+conditions share one train/validation split (harness contract (docs/harness_contract.md)
+C5), the same
 validation frames appear in every run, so the errors can be joined frame by frame rather
 than only compared as averages.
 
-That join is what makes the two analyses SETUP.md asks for possible:
+That join is what makes the two analyses PLAN.md asks for possible:
 
-* the per-stage difference of section 11, which needs error attributed to timesteps;
-* the complementarity metric of section 13, ``C(v | p) = L(pi_p) - L(pi_{p+v})``, which is
-  defined per frame before being aggregated.
+* the per-stage difference, which needs error attributed to individual timesteps;
+* the complementarity metric ``C(v | p) = L(pi_p) - L(pi_{p+v})``, which is defined per
+  frame before being aggregated.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-"""Dataset tests from SETUP.md section 18.
+"""Dataset tests from PLAN.md Stage 2.
 
 The listed cases are: image keys exist, camera subset returns the correct number of views,
 timestamps/indices remain aligned, the action target is unchanged across view subsets, and
@@ -6,7 +6,8 @@ random-camera sampling is deterministic under a fixed seed.
 
 The action-target test and the shared-split test are the load-bearing ones. If either
 fails, the conditions are not comparable and every number in the study is meaningless —
-which is exactly the failure mode SETUP.md section 7 is written to prevent.
+which is exactly the failure mode the harness contract (docs/harness_contract.md) is
+written to prevent.
 """
 
 from __future__ import annotations
@@ -97,7 +98,7 @@ def test_split_rejects_degenerate_fractions(synthetic_cache):
 
 
 def test_split_is_identical_across_view_conditions(synthetic_cache):
-    """SETUP.md section 7, requirement 2: the same split for every ablation arm."""
+    """harness contract C5: the same split for every ablation arm."""
     splits = {}
     for cond in CONDITIONS:
         tr, va = build_train_val(synthetic_cache, cond, val_fraction=0.2, split_seed=0)
@@ -122,7 +123,7 @@ def test_camera_subset_returns_correct_number_of_views(synthetic_cache, cond, vi
 
 
 def test_sample_count_is_identical_across_conditions(synthetic_cache):
-    """A random-view run must not silently change the number of samples (section 7)."""
+    """A stochastic condition must not change the sample count (harness contract C3)."""
     counts = {}
     for cond in CONDITIONS:
         tr, va = build_train_val(synthetic_cache, cond)
@@ -149,7 +150,7 @@ def test_empty_episode_list_is_rejected(synthetic_cache):
 
 
 def test_action_target_is_unchanged_across_view_subsets(synthetic_cache):
-    """SETUP.md section 18: the action target must not depend on the camera subset.
+    """PLAN.md Stage 2: the action target must not depend on the camera subset.
 
     Without this, a difference between conditions could come from different supervision
     rather than different observations.
@@ -251,7 +252,7 @@ def test_action_horizon_clamps_at_the_episode_end(synthetic_cache):
 
 
 def test_deterministic_random_camera_sampling_under_fixed_seed(synthetic_cache):
-    """SETUP.md section 18."""
+    """PLAN.md Stage 2."""
     a, _ = build_train_val(synthetic_cache, "random_two", seed=0)
     b, _ = build_train_val(synthetic_cache, "random_two", seed=0)
     for i in range(0, len(a), 5):
@@ -352,7 +353,54 @@ def test_stage_is_minus_one_without_annotations(synthetic_cache):
 # ---------------------------------------------------------------- logging metadata
 
 
-def test_describe_records_what_section_16_requires(synthetic_cache):
+# ---------------------------------------------------------------- information tiers
+
+
+def test_method_tier_emits_only_rgb_and_bookkeeping(synthetic_cache):
+    """PLAN.md section 9: the method must see only what an Internet clip could supply."""
+    from p2c.data.tiers import Tier
+
+    tr, _ = build_train_val(synthetic_cache, "primary+wrist", tier=Tier.METHOD)
+    keys = set(tr[0])
+    assert "images" in keys
+    assert "action" not in keys, "robot supervision leaked into the method tier"
+    assert "state" not in keys, "proprioception leaked into the method tier"
+    assert "stage" not in keys, "privileged stage labels leaked into the method tier"
+
+
+def test_policy_tier_adds_supervision_but_not_privileged_state(synthetic_cache_with_stages):
+    from p2c.data.tiers import Tier
+
+    tr, _ = build_train_val(synthetic_cache_with_stages, "single_primary", tier=Tier.POLICY)
+    keys = set(tr[0])
+    assert {"images", "action", "state"} <= keys
+    assert "stage" not in keys
+
+
+def test_oracle_tier_is_the_default_and_sees_everything(synthetic_cache_with_stages):
+    tr, _ = build_train_val(synthetic_cache_with_stages, "single_primary")
+    assert {"images", "action", "state", "stage"} <= set(tr[0])
+
+
+def test_tier_does_not_change_the_images(synthetic_cache):
+    """Restricting the tier must withhold fields, not alter the pixels."""
+    from p2c.data.tiers import Tier
+
+    a, _ = build_train_val(synthetic_cache, "primary+wrist", tier=Tier.METHOD)
+    b, _ = build_train_val(synthetic_cache, "primary+wrist", tier=Tier.ORACLE)
+    assert np.allclose(a[5]["images"].numpy(), b[5]["images"].numpy())
+
+
+def test_tier_is_recorded_in_run_metadata(synthetic_cache):
+    from p2c.data.tiers import Tier
+
+    tr, _ = build_train_val(synthetic_cache, "single_primary", tier=Tier.POLICY)
+    d = tr.describe()
+    assert d["tier"] == "POLICY"
+    assert "stage" not in d["fields_emitted"]
+
+
+def test_describe_records_what_contract_c12_requires(synthetic_cache):
     tr, _ = build_train_val(synthetic_cache, "random_two", seed=3)
     d = tr.describe()
     assert d["condition"] == "random_two"

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Evaluate a trained tiny BC checkpoint (SETUP.md section 19).
+"""Evaluate a trained tiny BC checkpoint (the harness contract (docs/harness_contract.md)).
 
 Re-runs validation from a saved checkpoint and reports overall, per-action-group and
 per-stage errors. Useful for two things the training loop does not cover:

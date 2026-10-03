@@ -4,7 +4,8 @@ Opens every array as a memmap so a cache larger than the machine's 5.8 GB of RAM
 still usable: only the touched pages are resident.
 
 The deterministic train/validation split lives here rather than in the Dataset, because
-SETUP.md section 7 requires *identical* splits across every camera ablation. Splitting by
+the harness contract (docs/harness_contract.md) requires *identical* splits across every
+camera ablation. Splitting by
 episode (never by frame) also stops frames from one demonstration appearing on both
 sides, which would leak and flatter every condition equally but invalidate the
 comparison.
@@ -152,7 +153,7 @@ class FrameCache:
 
         Identical for every camera condition because it depends only on the cache
         contents and ``split_seed`` — not on the view condition, model seed, or
-        iteration order (SETUP.md section 7, requirement 2; section 17).
+        iteration order (harness contract C5).
         """
         eps = sorted(s.episode_index for s in self.spans)
         if not 0.0 < val_fraction < 1.0:

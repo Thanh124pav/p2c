@@ -1,6 +1,6 @@
-"""Stage-level analysis, SETUP.md section 11, and the heterogeneity test of section 21.
+"""Stage-level analysis, PLAN.md section 9, and the heterogeneity test of section 21.
 
-Section 11 defines, for stage ``g``::
+For stage ``g``, the quantity of interest is::
 
     Delta_view(g) = L_partial(g) - L_multi(g)
 
@@ -11,7 +11,7 @@ a few percent is easily noise. Every delta therefore carries a bootstrap confide
 interval over validation frames, so a reported gain can be told apart from sampling
 scatter rather than being read off a point estimate.
 
-**Heterogeneity.** SETUP.md section 21, kill criterion 5, says the project should stop if
+**Heterogeneity.** PLAN.md section 13.5, says the project should stop if
 gains are *uniform* across stages. That is a claim about the spread of per-stage deltas,
 so :func:`heterogeneity_test` tests it directly with a permutation test on stage labels
 instead of leaving it to visual inspection of a table.
@@ -140,9 +140,9 @@ def heterogeneity_test(
     stage and improvement while keeping the marginal distribution of improvements intact.
 
     A small p-value means improvement is stage dependent, which is the structured result
-    SETUP.md section 10 is looking for. A large p-value is evidence *for* kill criterion 5
-    of section 21 (uniform gains), and this function says so in ``interpretation`` rather
-    than leaving the direction of the test ambiguous.
+    PLAN.md section 9 is looking for. A large p-value is evidence *for* kill criterion 5
+    that the effect is not stage dependent, and this function says so in
+    ``interpretation`` rather than leaving the direction of the test ambiguous.
     """
     d = err_partial - err_multi
     valid = stage >= 0
@@ -178,11 +178,11 @@ def heterogeneity_test(
         "stage_dependent": bool(p < 0.05),
         "per_stage_mean_improvement": per_stage,
         "interpretation": (
-            "improvement varies across stages (structured, consistent with SETUP.md "
-            "section 10)"
+            "improvement varies across stages (structured, consistent with PLAN.md "
+            "structure)"
             if p < 0.05
             else "improvement is statistically uniform across stages; this is evidence "
-            "FOR kill criterion 5 in SETUP.md section 21"
+            "FOR kill criterion 5 in PLAN.md section 13.5"
         ),
     }
 

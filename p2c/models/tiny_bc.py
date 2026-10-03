@@ -1,4 +1,4 @@
-"""Tiny behaviour-cloning policy: the phenomenon detector of SETUP.md section 8.
+"""Tiny behaviour-cloning policy: the phenomenon detector of PLAN.md Stage 2.
 
 This is deliberately small. It is not meant to be a strong policy and its numbers are not
 a paper result — it exists to falsify the P2C hypothesis cheaply on a 4 GB GPU.
@@ -103,14 +103,15 @@ class TinyBCPolicy(nn.Module):
             return out.reshape(-1, self.action_horizon, self.action_dim)
         return out
 
-    # ---------------- capacity accounting (SETUP.md section 12, Control B) ----------------
+    # ---------------- capacity accounting (harness contract (docs/harness_contract.md)
+    # C2) ----------------
 
     def num_parameters(self, trainable_only: bool = True) -> int:
         ps = self.parameters()
         return sum(p.numel() for p in ps if p.requires_grad or not trainable_only)
 
     def capacity_report(self) -> dict:
-        """Parameter counts per component, plus whether Control B holds.
+        """Parameter counts per component, plus whether capacity matching (C2) holds.
 
         ``view_count_independent`` is the claim that matters: when True, swapping the
         view condition cannot change the model size, so a multi-view gain cannot be
@@ -157,7 +158,7 @@ def action_metrics(
     """Overall and per-group action errors.
 
     ``action_groups`` comes from the dataset's own ``modality.json`` (via the cache
-    index), so the rotation and gripper metrics SETUP.md section 8 asks for are computed
+    index), so the rotation and gripper metrics PLAN.md Stage 2 asks for are computed
     on the real slices rather than guessed offsets.
 
     Errors are reported in the *normalised* action space the model is trained in, which is
@@ -185,8 +186,9 @@ def action_metrics(
 def per_sample_squared_error(pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
     """Mean squared error per sample, [B].
 
-    The complementarity metric of SETUP.md section 13 and the stage breakdown of
-    section 11 both need error attributed to individual frames, not just a batch average.
+    The complementarity metric of PLAN.md section 1 and the stage breakdown of
+    the per-stage breakdown both need error attributed to individual frames, not just a
+    batch average.
     """
     p = pred.reshape(pred.shape[0], -1).float()
     t = target.reshape(target.shape[0], -1).float()

@@ -1,4 +1,4 @@
-# Overfit sanity test, SETUP.md section 18.
+# Overfit sanity test, PLAN.md Stage 2.
 #
 # Train on 16-64 samples until the loss is near zero. If this fails, the pipeline is
 # broken and no full experiment should be started. Run with:

@@ -1,4 +1,4 @@
-"""Automated evaluation of the kill criteria in SETUP.md section 21.
+"""Automated evaluation of the kill criteria in PLAN.md section 13.5.
 
 The plan is explicit that P2C should be falsifiable and that a negative result is useful
 (sections 21 and 25). Leaving the criteria to be eyeballed off a table invites reading a
@@ -6,7 +6,7 @@ The plan is explicit that P2C should be falsifiable and that a negative result i
 threshold with a paired bootstrap interval, and the verdict is reported either way.
 
 Criteria 1-5 are computable from the local ablation. Criterion 6 needs a camera-pose
-conditioned baseline, which SETUP.md section 15 defers to after the MVP; criterion 7 is a
+conditioned baseline, which PLAN.md section 12 defers to after the MVP; criterion 7 is a
 judgement about the final method, not a measurement. Both are reported as not evaluated
 rather than quietly passed.
 
@@ -59,7 +59,7 @@ def check_validity(
     predict-the-mean baseline, the ablation has no signal, and that is a statement about
     the experiment — underpowered, or a task whose goal is not visually determined — not
     evidence against P2C. Collapsing the two would let a broken setup masquerade as a
-    falsified hypothesis, which is the opposite of what SETUP.md section 21 is for.
+    falsified hypothesis, which is the opposite of what PLAN.md section 13.5 is for.
     """
     if trivial_baseline != trivial_baseline:  # NaN
         return Verdict(
@@ -176,8 +176,8 @@ def evaluate(
         errors, 2,
         "random additional view performs as well as the complementary view",
         primary, complementary, "random_two", equivalence_margin, seed, thresholds,
-        note="this is SETUP.md section 12 Control A; if triggered, the effect is generic "
-             "multi-view scaling, not complementarity",
+        note="this is harness contract C9 (docs/harness_contract.md); if triggered, "
+             "the effect is generic multi-view scaling, not complementarity",
     ))
 
     # ---- criterion 3: duplicate view performs as well as a real second view ----
@@ -185,7 +185,7 @@ def evaluate(
         errors, 3,
         "duplicate-view control performs similarly to a real second view",
         primary, complementary, "primary+duplicate", equivalence_margin, seed, thresholds,
-        note="this is SETUP.md section 12 Control D; if triggered, the gain comes from "
+        note="this is harness contract C9; if triggered, the gain comes from "
              "input/compute scaling rather than new information",
     ))
 
@@ -250,7 +250,7 @@ def evaluate(
     out.append(Verdict(
         6, "a camera-pose-conditioned single-view baseline closes almost all of the gap",
         "not_evaluated",
-        "requires the camera-pose conditioning baseline, which SETUP.md section 15 lists "
+        "requires the camera-pose conditioning baseline, which PLAN.md section 12 lists "
         "as Priority 3 after the MVP. Not implemented yet, so this remains an open risk.",
     ))
     out.append(Verdict(
@@ -318,7 +318,7 @@ def _control_criterion(
 
 
 def report(verdicts: list[Verdict]) -> str:
-    L = ["=" * 78, "KILL CRITERIA (SETUP.md section 21)", "=" * 78]
+    L = ["=" * 78, "KILL CRITERIA (PLAN.md section 13.5)", "=" * 78]
     for v in verdicts:
         L.append(v.line())
 
@@ -337,7 +337,7 @@ def report(verdicts: list[Verdict]) -> str:
     if trig:
         L.append(
             f"VERDICT: {len(trig)} criterion/criteria triggered "
-            f"({', '.join(str(v.criterion) for v in trig)}). SETUP.md section 21 says to "
+            f"({', '.join(str(v.criterion) for v in trig)}). PLAN.md section 13.5 says to "
             f"stop or substantially reframe P2C rather than force a method."
         )
     else:

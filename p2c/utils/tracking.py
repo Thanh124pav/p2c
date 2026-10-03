@@ -1,14 +1,15 @@
-"""Experiment tracking, per SETUP.md section 16.
+"""Experiment tracking, per harness contract (docs/harness_contract.md) C12.
 
-Every run writes a self-contained directory holding the full list section 16 requires:
-git commit hash, config, dataset identity, task, seed, camera subset, demo count, image
-resolution, parameter count, training steps, validation losses, success metrics,
-checkpoint and captured stdout/stderr.
+Every run writes a self-contained directory holding what C12 requires: git commit hash,
+resolved config, dataset identity, task, seed, condition, demo count, image resolution,
+parameter count, training steps, validation losses, success metrics, checkpoint and
+captured stdout/stderr. The test is whether someone could reproduce the run from the
+directory alone.
 
 Structured JSON/CSV is the default so the project does not depend on Weights & Biases
 being configured; W&B is used additionally when available and requested.
 
-Run naming follows section 16::
+Run naming::
 
     p2c_<task>_<policy>_<views>_seed<seed>
 """
@@ -154,7 +155,7 @@ class RunLogger:
 
 
 class Tee:
-    """Duplicate stdout/stderr into the run directory (section 16: stdout/stderr)."""
+    """Duplicate stdout/stderr into the run directory (harness contract C12)."""
 
     def __init__(self, path: Path, stream):
         self.file = open(path, "a", buffering=1)

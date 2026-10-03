@@ -6,16 +6,17 @@
 #
 # Only shape_meta.obs differs from the upstream config. Everything else -- image shapes,
 # state keys, action keys, env_runner and dataset settings -- is upstream's, so these
-# arms differ only in which camera streams the policy sees (SETUP.md section 7).
+# arms differ only in which camera streams the policy sees (the harness contract
+# (docs/harness_contract.md)).
 #
 # NOT YET RUN. These configs were written against upstream but have not been executed:
 # this machine has a 4 GB GPU and the official guidance is >=24 GB for training. Before
 # the first remote run, check at least:
-#   * dataset.dataset_soup -- upstream points at a multi-task soup; SETUP.md section 20
+#   * dataset.dataset_soup -- upstream points at a multi-task soup; PLAN.md section 7.2
 #     says to start with ONE task, so this likely needs a single-task soup entry.
 #   * env_runner.dataset_path -- upstream hard-codes a cluster path that will not exist.
 #   * dataloader.batch_size -- upstream uses 192; adjust for the actual GPU and record
-#     the effective batch size (SETUP.md section 20).
+#     the effective batch size (PLAN.md section 7.2).
 #   * that the policy's observation encoder accepts the reduced camera count.
 
 name: target_atomic_seen_p2c_B3_all_views

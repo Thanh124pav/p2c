@@ -1,10 +1,9 @@
 #!/usr/bin/env python
-"""Summarise a view ablation (SETUP.md section 19).
+"""Summarise a view ablation (the harness contract (docs/harness_contract.md)).
 
-Produces everything section 19 asks for — an overall comparison table, a per-task table, a
-per-stage table, CSV output and a figure comparing view subsets — plus the two analyses
-the plan gates on those tables: the complementarity metric of section 13 and the automated
-kill-criteria verdict of section 21.
+Produces an overall comparison table, a per-task table, a per-stage table, CSV output and
+a figure comparing conditions, plus the two analyses that depend on them: the
+complementarity metric and an automated falsification verdict.
 
 Usage::
 
@@ -346,7 +345,7 @@ def main() -> int:
         if ps:
             print()
             print("=" * 78)
-            print("PER-STAGE COMPARISON (SETUP.md section 11)")
+            print("PER-STAGE COMPARISON (PLAN.md section 9)")
             print("=" * 78)
             print(f"  {'stage':24s} {'n':>6s} {'partial':>9s} {'multi':>9s} "
                   f"{'delta':>9s} {'rel':>7s} {'sig':>4s}")
@@ -362,7 +361,7 @@ def main() -> int:
             print()
             print("PER-STAGE COMPARISON: unavailable (no stage annotations in these runs).")
             print("  RoboCasa365 ships per-frame stage labels only for target *composite*")
-            print("  tasks, so SETUP.md sections 10-11 need a composite dataset.")
+            print("  tasks, so PLAN.md section 9 need a composite dataset.")
         if stage.size and (stage >= 0).any():
             names = next((r.stage_names for r in runs if r.stage_names), {})
             all_results["stage_frame_counts"] = stage_frame_counts(stage, names)
@@ -372,7 +371,7 @@ def main() -> int:
             comp = complementarity(errors, args.primary)
             print()
             print("=" * 78)
-            print("COMPLEMENTARITY (SETUP.md section 13)")
+            print("COMPLEMENTARITY (PLAN.md section 1)")
             print("=" * 78)
             print(comp.summary())
             write_csv(out / "complementarity.csv", comp.as_rows())
@@ -394,7 +393,7 @@ def main() -> int:
                     json.dump(top, f, indent=2)
                 print()
                 print("frames where the complementary view helps most "
-                      "(SETUP.md section 11):")
+                      "(PLAN.md section 9):")
                 for t in top[:6]:
                     print(f"  episode {t['episode']:4d} frame {t['frame']:4d}  "
                           f"C={t['C']:.5f}  ({t['err_partial']:.5f} -> "

@@ -1,7 +1,7 @@
 """Fusion of per-view features into one observation embedding.
 
-The choice of fusion decides whether SETUP.md section 12 Control B (capacity matching)
-holds by construction or has to be patched afterwards:
+The choice of fusion decides whether capacity matching — harness contract C2
+(docs/harness_contract.md) — holds by construction or has to be patched afterwards:
 
 ``mean``   permutation-invariant average. Parameter count is **independent of the number
            of views**, so a 1-view and a 3-view model are exactly the same size. This is
@@ -10,7 +10,7 @@ holds by construction or has to be patched afterwards:
            unlike ``mean`` it can select rather than average, so complementary evidence is
            not washed out by a view that happens to be uninformative.
 ``concat`` concatenates view features. Parameter count **grows with the number of views**,
-           so it violates Control B. Supported for completeness, but it warns, and the
+           so it violates C2. Supported for completeness, but it warns, and the
            training script records the violation in the run metadata.
 """
 
@@ -75,7 +75,7 @@ class ConcatFusion(nn.Module):
         super().__init__()
         warnings.warn(
             "ConcatFusion makes the parameter count depend on the number of views, "
-            "which violates SETUP.md section 12 Control B (capacity matching). Results "
+            "which violates harness contract C2 (capacity matching). Results "
             "from it cannot separate complementary information from extra capacity.",
             stacklevel=2,
         )

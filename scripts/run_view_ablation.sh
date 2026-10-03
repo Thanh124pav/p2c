@@ -1,21 +1,30 @@
 #!/usr/bin/env bash
-# Run the controlled view ablation of SETUP.md sections 9 and 12.
+# Sweep conditions along the viewpoint partialization axis, holding everything else fixed.
 #
-# Everything except the camera subset is held fixed: same cache, same split, same seed,
-# same optimiser settings, same model size. Only --views changes between arms, which is
-# the whole point of the comparison.
+# Same cache, split, seed, optimiser settings and model size across every arm; only
+# --views changes. That is harness contract C1 (docs/harness_contract.md), and it is the
+# whole point of the comparison.
+#
+# Viewpoint is one partialization axis among several (p2c/data/partialization.py also
+# covers temporal cropping, phase drop and occlusion). PLAN.md section 13.6 warns against
+# letting this axis define the research problem, so read these arms as a controlled probe,
+# not as the question.
 #
 # Arms:
-#   B0  single_primary          partial observation (the baseline everything is measured against)
-#   B1  single_wrist            alternative single view
-#   B2  primary+wrist           fixed complementary pair
-#   B3  all_views               full-view oracle (upper bound available from the dataset)
-#   B4  random_two              primary + random second view  (Control A, section 12)
-#   CD  primary+duplicate       primary twice                 (Control D, section 12)
-#   CC  primary+wrist_dropout   pair with view dropout        (Control C, section 12)
+#   single_primary          the partial observation everything is measured against
+#   single_wrist            alternative single view
+#   primary+wrist           fixed complementary pair
+#   all_views               full-view oracle: the upper bound this dataset allows
+#   random_two              primary + a random second view   (control, C9)
+#   primary+duplicate       the same camera twice            (control, C9)
+#   primary+wrist_dropout   the pair with stochastic dropout (control, C9)
 #
-# B5 (learned view selection) is deliberately absent: SETUP.md section 9 says not to
-# implement it until B0-B4 produce a convincing phenomenon.
+# The three controls are what separate "complementary evidence helps" from "more input
+# helps": if a random or duplicated view recovers the pair's gain, the effect is scale,
+# not complementarity.
+#
+# No learned view selector is included. PLAN.md section 14 puts method design before
+# further implementation, and section 13.5 forbids scaling before a falsifiable signal.
 #
 # Usage:
 #   bash scripts/run_view_ablation.sh

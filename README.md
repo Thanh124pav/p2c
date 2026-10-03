@@ -1,36 +1,69 @@
-# P2C — Partial-to-Complementary Visual Data for Robot Learning
+# P2C — Partial-to-Complementary Visual Learning for Robot Manipulation
 
-A controlled data study, not a method. The implementation plan is [SETUP.md](SETUP.md);
-this README covers how to run what has been built.
+Infrastructure for the research programme in [PLAN.md](PLAN.md). The plan is the source of
+truth for the research question; this README covers what is built and how to run it.
+[PROGRESS.md](PROGRESS.md) is the source of truth for machine-specific facts: verified
+package versions, downloaded datasets, passing tests, environment limits.
 
-## The question
+## What this repository is, and is not
 
-Does complementary visual evidence measurably improve robot learning compared with a
-partial observation, and is the improvement task/stage dependent rather than merely caused
-by adding more pixels?
+The target ([PLAN.md §1](PLAN.md)) is **partial, cheap, action-free human manipulation
+video** — RGB plus at most weak text, with no action labels, no proprioception, no reward
+and no simulator state. The question is whether incomplete visual evidence from such video
+can be turned into complementary manipulation knowledge that improves embodied learning.
 
-The headline comparison is deliberately not "more views help". It is:
+Simulation is therefore **evaluation apparatus and a controlled data source**, not the
+research problem ([§2](PLAN.md)). Nothing here should be read as "we improve policy
+learning on RoboCasa".
 
-```
-Performance(partial + complementary)  >  Performance(partial + random)
-```
+**The P2C method itself is not implemented yet.** [§14](PLAN.md) puts method design before
+further implementation, and [§13.5](PLAN.md) forbids scaling before a falsifiable local
+signal. What exists today is the infrastructure [§10](PLAN.md) says to keep: RoboCasa365
+readers, a frame cache, partialization, small encoders, a tiny BC policy, analysis and
+tracking.
 
-If that inequality does not hold, the result reduces to generic multi-view scaling, and
-[SETUP.md section 21](SETUP.md) says to stop rather than force a method.
+## The information tiers ([§9](PLAN.md))
 
-## Why this runs on a 4 GB GPU without a working renderer
+The simulator exposes far more than the method may consume, and conflating the tiers would
+undermine the central claim — a method that needs privileged simulator state does not
+transfer to cheap Internet video. The code enforces the separation rather than relying on
+discipline:
 
-RoboCasa365 ships its datasets in LeRobot format with **mp4 already rendered for three
-synchronised cameras** (`robot0_agentview_left`, `robot0_agentview_right`,
-`robot0_eye_in_hand`, all 256x256 at 20 fps). The MVP therefore reads parquet + mp4
-directly and never calls MuJoCo, so it needs neither Vulkan nor EGL. Offscreen rendering
-is only required for policy *rollout* evaluation, which belongs to the remote Diffusion
-Policy stage.
+| Tier | May use | Enforced by |
+|---|---|---|
+| **Main method input** | RGB video, optional weak language | `Tier.METHOD` views of a sample |
+| **Downstream policy** | RGB representation, robot actions as supervision, optional proprioception | `Tier.POLICY` |
+| **Analysis / oracle only** | stage labels, object poses, segmentation, contact, full sim state, reward, success | `Tier.ORACLE` |
 
-The three real cameras cover every view condition the plan asks for, with
-`agentview_left` as primary, `agentview_right` as secondary and `eye_in_hand` as wrist.
+`p2c.data.tiers` defines these, and `CameraSubsetDataset` tags every field it emits. Asking
+a sample for a field above the tier you declared raises rather than silently returning it.
+Stage labels in particular are **oracle-only**: they are legitimate for the per-stage
+analysis, and illegitimate as policy input.
+
+## Partialization ([§1](PLAN.md), [§6.1](PLAN.md))
+
+"Partial" arises from temporal cropping, occlusion, missing task phases, viewpoint limits,
+or incomplete clips. `p2c.data.partialization` treats these as interchangeable axes over a
+full trajectory, so an experiment can vary *how* a sample is made partial without the code
+assuming a particular answer. This matters because [§13.6](PLAN.md) warns against letting
+the earlier multi-view implementation lock the research problem into view selection.
+
+Available axes:
+
+| Axis | What it removes | Class |
+|---|---|---|
+| viewpoint | camera streams | `ViewpointPartial` |
+| temporal | frames outside a window | `TemporalCropPartial` |
+| phase | frames belonging to whole task stages | `PhaseDropPartial` |
+| occlusion | image regions | `OcclusionPartial` |
+
+Each returns the kept sample plus a record of what was withheld, which is what makes
+"complementary evidence" measurable against a known ground truth.
 
 ## Setup
+
+The verified environment is recorded in [PROGRESS.md](PROGRESS.md) and
+[PLAN.md §6.1](PLAN.md). It **must not be destabilized**.
 
 ```bash
 conda create -c conda-forge -n robocasa python=3.11 -y
@@ -39,159 +72,90 @@ pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
 pip install -r requirements.txt
 ```
 
-Datasets are downloaded per task (roughly 0.3–0.6 GB for an atomic task, 0.7–2.1 GB for a
-composite one, each with 500 demonstrations):
+RoboCasa itself needs a specific install order; plain `pip install -e .` hangs. See
+[PROGRESS.md §2](PROGRESS.md) for the working sequence and why.
 
-```bash
-python -m robocasa.scripts.download_datasets --tasks NavigateKitchen --split target
-```
-
-`robocasa` is only needed for that download helper and for the simulator stages. See
-[requirements.txt](requirements.txt) for why it is installed separately.
+LIBERO goes in **its own environment** — [PLAN.md §13.2](PLAN.md) forbids installing it
+into the RoboCasa environment, and its pins (`numpy==1.22.4`, `robosuite==1.4.0`,
+`gym==0.25.2`, Python 3.8) are incompatible with this one.
 
 ## Pipeline
 
-### Stage 0 — verify the dataset schema
-
-Nothing about camera names, resolutions or action dimensions is hard-coded; it is all read
-off disk and checked.
-
 ```bash
-python scripts/inspect_dataset.py --task NavigateKitchen
-python scripts/visualize_episode.py --task NavigateKitchen --episode 0 --mode grid
-```
+# Verify the dataset schema. Nothing about cameras or shapes is hard-coded.
+python scripts/inspect_dataset.py --task StackBowlsCabinet
+python scripts/visualize_episode.py --task StackBowlsCabinet --episode 0 --mode grid
 
-### Stage 1 — build a frame cache
+# Decode mp4 once into a uint8 memmap cache.
+python scripts/build_frame_cache.py --task StackBowlsCabinet --num-episodes 120 --res 96
 
-Decodes every camera's mp4 **once** into a uint8 memmap. Two reasons beyond speed: it makes
-"identical preprocessing across conditions" ([SETUP.md section 7](SETUP.md)) a structural
-guarantee rather than a convention, and it makes camera synchronisation true by
-construction, since every camera writes to the same global frame index.
-
-```bash
-python scripts/build_frame_cache.py --task NavigateKitchen --num-episodes 40 --res 84
-```
-
-### Stage 2 — sanity-check, then ablate
-
-```bash
-# Overfit test (SETUP.md section 18): must reach near-zero loss or stop here.
+# Sanity gate: must reach near-zero loss or stop.
 python scripts/train_local_bc.py --config configs/overfit.yaml --views primary --overfit 32
 
-# One condition.
-python scripts/train_local_bc.py --config configs/local_debug.yaml --views primary+wrist
+# A controlled experiment over partialization conditions.
+CACHE=outputs/cache/StackBowlsCabinet_target_r96_e120 CONFIG=configs/composite.yaml \
+  bash scripts/run_view_ablation.sh
 
-# The full ablation with everything else held fixed.
-CACHE=outputs/cache/NavigateKitchen_target_r84_e40 bash scripts/run_view_ablation.sh
-
-# Tables, figure, complementarity metric and kill-criteria verdict.
-python scripts/summarize_view_ablation.py --input outputs/runs
+python scripts/summarize_view_ablation.py --input outputs/runs_composite
 ```
 
-## Choosing a task: the goal must be visually determined
+RoboCasa365 ships mp4 already rendered for three synchronised cameras, so the data path
+reads parquet + mp4 and never calls MuJoCo. It needs no GPU renderer, which is what makes
+it runnable here without a usable Vulkan ICD.
 
-This matters more than it looks, and it is easy to get wrong.
+## What keeps a comparison honest
 
-A vision-only behaviour-cloning policy can only beat the predict-the-mean baseline if the
-action is a function of the observation. On a task whose goal is carried by the *language
-instruction* rather than the image, the same view maps to different actions, so the best
-achievable prediction is the conditional mean — and every camera condition sits at that
-floor regardless of how much visual evidence it gets.
+These are properties of the harness, not of any particular hypothesis, so they survive the
+method still being undesigned:
 
-Measured instruction diversity in the three downloaded target datasets:
-
-| Task | Instructions | Episodes | Verdict |
-|---|---|---|---|
-| `NavigateKitchen` | **14** (sink / stove / fridge / …) | 500 | goal not visually determined — unusable for this study without goal conditioning |
-| `PickPlaceCounterToCabinet` | 106 (one per object) | 502 | target object is visible on the counter, so largely visually determined |
-| `StackBowlsCabinet` | **1** | 515 | unambiguous, **and** carries per-frame stage labels |
-
-`StackBowlsCabinet` is therefore the primary task: single instruction, stage annotations,
-and manipulation-heavy, which is where occlusion and fine alignment — the mechanisms P2C
-is about — actually bite.
-
-Every run prints its predict-the-mean baseline and the number of instructions in the
-cache, and `summarize_view_ablation.py` reports **criterion 0, experiment validity**,
-before the kill criteria. If no arm clears the baseline, the summary says the ablation has
-no signal and explicitly refuses to record a kill. A broken experiment and a falsified
-hypothesis look identical in a table of numbers; they are not the same thing, and
-conflating them is the easiest way to kill a project for the wrong reason.
-
-## View conditions
-
-Mapped to the baselines of [SETUP.md section 9](SETUP.md):
-
-| Condition | Baseline | Meaning |
-|---|---|---|
-| `single_primary` | B0 | partial observation — the reference everything is measured against |
-| `single_wrist` | B1 | alternative single view |
-| `primary+wrist` | B2 | fixed complementary pair |
-| `all_views` | B3 | full-view oracle, the dataset's upper bound |
-| `random_two` | B4 | primary + random second view — **Control A** |
-| `primary+duplicate` | — | the same camera twice — **Control D** |
-| `primary+wrist_dropout` | — | pair with stochastic view dropout — **Control C** |
-
-`B5` (learned view selection) is deliberately not implemented: section 9 gates it on
-B0–B4 first producing a convincing phenomenon. What *is* implemented is the oracle
-complementarity target and a measurement of how much headroom a selector would have — if
-an oracle per-frame selector barely beats the best fixed pair, a learned one cannot do
-better, and B5 is not worth building.
-
-## What keeps the comparison honest
-
-The controls are the point of the study, so they are enforced in code rather than left to
-discipline:
-
-- **Capacity matching (Control B).** One encoder is shared across views and the default
-  fusion is view-count independent, so a 1-view and a 3-view model have *identical*
-  parameter counts. `tests/test_model_forward.py` asserts this. `concat` fusion is
-  available but warns and is recorded as violating the control.
-- **Fixed sample count and order.** Every condition yields the same number of samples in
-  the same `(episode, frame)` order, so a random-view arm cannot quietly change the
-  dataset. Asserted in `tests/test_dataset.py`.
+- **Capacity matching.** One encoder is shared across views and the default fusion is
+  view-count independent, so 1-, 2- and 3-view models have *identical* parameter counts.
+  Asserted in `tests/test_model_forward.py`. `concat` fusion is available but warns and is
+  recorded as violating the property.
+- **Fixed sample count and order.** Every condition yields the same samples in the same
+  `(episode, frame)` order, so a stochastic condition cannot quietly change the dataset.
 - **Identical targets.** Actions and states are read at the same frame index regardless of
-  camera subset, and normalised with statistics from the training episodes only.
-- **Shared split.** The train/validation split is hashed from the cache and a split seed,
-  never from the view condition, so per-sample errors can be joined frame by frame across
-  conditions.
-- **Determinism.** Random camera draws hash `(seed, episode, frame)` instead of touching
-  global RNG state, so dataloader workers and resumed runs agree.
+  condition, normalised with training-split statistics only.
+- **Shared split.** Train/validation is hashed from the cache and a split seed, never from
+  the condition, so per-sample errors can be joined frame by frame across conditions.
+- **Determinism.** Random draws hash `(seed, episode, frame)` instead of touching global
+  RNG state, so dataloader workers and resumed runs agree.
+- **Augmentation is training-only**, applied in the loop rather than the Dataset, so
+  validation frames stay byte-identical across conditions.
 
 ## Analysis
 
-`scripts/summarize_view_ablation.py` reports:
+`scripts/summarize_view_ablation.py` reports overall, per-task and per-stage tables with
+CSVs and figures, **paired** bootstrap intervals (all conditions see the same validation
+frames), the complementarity metric, and an automated falsification verdict.
 
-- overall, per-task and per-stage tables plus CSVs and a comparison figure;
-- **paired** bootstrap confidence intervals, since all conditions are evaluated on the
-  same validation frames — a point estimate alone cannot separate a real gain from scatter
-  at this data scale;
-- `C(v | p) = L(pi_p) - L(pi_{p+v})` per candidate view ([section 13](SETUP.md));
-- the frames where the extra view helps most, for inspection;
-- an automated verdict on the seven kill criteria of
-  [section 21](SETUP.md). Criteria 1–5 are computed; 6 needs the camera-pose baseline that
-  section 15 defers past the MVP, and 7 is a judgement, so both are reported as *not
-  evaluated* rather than as passes.
+Two guards exist because the first runs produced misleading numbers:
 
-Stage-dependence (`criterion 5`) is tested with a permutation test on stage labels, not by
-reading a table — "gains are uniform across stages" is a claim about spread and deserves a
-test. Stage labels exist only for **target composite** tasks; atomic tasks carry
-episode-level language only.
+- **Experiment validity.** If no condition beats the predict-the-mean baseline, the summary
+  says the experiment has no signal and refuses to record a falsification. A broken
+  experiment and a falsified hypothesis look identical in a table of numbers.
+- **Selection-bias null for oracle headroom.** A per-frame minimum over K noisy models is
+  biased downwards even with no real structure. On the first task the raw headroom read
+  32% while the permutation noise floor was 90% — the apparent headroom was entirely
+  selection bias, and without the null it would have read as evidence to build a selector.
 
 ## Status
 
-See [PROGRESS.md](PROGRESS.md) for what has been verified on this machine and what is
-still open.
+Running experiments and verified facts: [PROGRESS.md](PROGRESS.md).
+Research direction and stage gates: [PLAN.md](PLAN.md).
 
 ## Layout
 
 ```
-configs/      run configurations; only `views` differs between ablation arms
-p2c/data/     schema discovery, frame cache, camera-subset dataset
-p2c/models/   tiny BC policy, shared view encoder, fusion
-p2c/analysis/ result joining, stage metrics, complementarity, kill criteria
-scripts/      inspect, visualize, build cache, train, ablate, summarize
-tests/        dataset, camera-subset and model tests (run against a synthetic cache)
-external/     upstream RoboCasa / robosuite checkouts (gitignored)
-datasets/     downloaded LeRobot data (gitignored)
-outputs/      caches, runs, summaries (gitignored)
+PLAN.md        research programme — the source of truth for the question
+PROGRESS.md    machine-specific verified facts, environment, results
+configs/       run configurations; only the condition differs between arms
+p2c/data/      schema discovery, frame cache, tiers, partialization, dataset
+p2c/models/    tiny BC policy, shared view encoder, fusion
+p2c/analysis/  result joining, stage metrics, complementarity, falsification
+scripts/       inspect, visualize, cache, train, summarize
+tests/         run against a synthetic cache; no dataset or GPU needed
+external/      upstream RoboCasa / robosuite / diffusion_policy (gitignored)
+datasets/      downloaded LeRobot data (gitignored)
+outputs/       caches, runs, summaries (gitignored)
 ```

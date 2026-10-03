@@ -1,8 +1,8 @@
-"""Model tests from SETUP.md section 18.
+"""Model tests from PLAN.md Stage 2.
 
 Covers the listed cases — single-view forward, multi-view forward, varying camera counts,
-loss backward, no NaNs, batch size 1 — plus the capacity-matching claim of section 12
-Control B, which is the one property the whole study rests on: if a 3-view model is
+loss backward, no NaNs, batch size 1 — plus the capacity-matching claim of contract C2
+capacity matching (C2), the one property any such comparison rests on: if a 3-view model is
 simply bigger than a 1-view model, no comparison between them means anything.
 """
 
@@ -161,11 +161,11 @@ def test_no_nans_on_extreme_inputs():
         assert torch.isfinite(out).all()
 
 
-# ---------------------------------------------------------------- capacity (Control B)
+# -------------------------------------------------------------- capacity matching (C2)
 
 
 def test_parameter_count_is_identical_across_view_counts():
-    """SETUP.md section 12, Control B.
+    """harness contract (docs/harness_contract.md) C2.
 
     With a shared encoder and mean fusion, swapping the view condition cannot change the
     model size, so a multi-view gain cannot be explained by extra capacity.
@@ -180,8 +180,8 @@ def test_attention_fusion_is_also_capacity_matched():
 
 
 def test_concat_fusion_is_flagged_as_not_capacity_matched():
-    """Concat fusion is allowed but must declare that it breaks Control B."""
-    with pytest.warns(UserWarning, match="Control B"):
+    """Concat fusion is allowed but must declare that it breaks capacity matching."""
+    with pytest.warns(UserWarning, match="C2"):
         m = make_policy(3, fusion="concat")
     assert m.capacity_report()["view_count_independent"] is False
     assert not fusion_is_capacity_matched("concat")

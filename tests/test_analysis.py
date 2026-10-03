@@ -91,7 +91,7 @@ def test_stage_frame_counts():
 
 
 def test_heterogeneity_detects_stage_dependent_gains():
-    """The structured result SETUP.md section 10 is looking for."""
+    """The structured result PLAN.md section 9 is looking for."""
     stage = np.repeat([0, 1, 2], N // 3)
     partial = errs(1.0, seed=5)
     multi = partial.copy()
@@ -279,7 +279,8 @@ def test_criterion_1_triggers_without_a_meaningful_gain():
 
 
 def test_criterion_2_triggers_when_random_matches_complementary():
-    """SETUP.md section 12 Control A: the result would be generic multi-view scaling."""
+    """harness contract (docs/harness_contract.md) C9: the result would be generic
+    multi-view scaling."""
     base = errs(1.0, seed=22)
     e = {
         "single_primary": base,

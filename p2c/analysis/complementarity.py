@@ -1,23 +1,25 @@
-"""Complementarity metric, SETUP.md section 13.
+"""An operational measure of complementary evidence.
 
-For a candidate additional view ``v`` given primary view ``p``::
+For a candidate additional source of evidence ``v`` given partial observation ``p``::
 
     C(v | p) = L(pi_p) - L(pi_{p+v})
 
-Computed per validation frame from runs that shared a split, then aggregated. This is the
-oracle/data-derived target that section 13 says to produce *before* training any
-predictor.
+Computed per validation frame from runs that shared a split, then aggregated. It is an
+*oracle*, data-derived quantity: it says how much a given extra evidence source was worth,
+after the fact, by comparing two trained policies.
 
-Scope note: section 13 is gated on B0-B4 and section 9 says not to implement B5 (learned
-view selection) until those produce a convincing phenomenon. So this module computes the
-oracle target and measures how much headroom a selector would have — it deliberately does
-**not** implement the predictor ``C_phi`` or the selector ``argmax_v C_phi``. The headroom
-number is the cheap pre-check for whether B5 is worth building at all: if an oracle
-selector barely beats the single best fixed view, a learned selector cannot do better, and
-building one would be wasted effort.
+PLAN.md section 1 leaves the definition of complementary information to the method design
+of Stage 1, and section 14 puts that design before further implementation. So this module
+deliberately stops at the oracle target: it does **not** implement a predictor
+``C_phi(p, v)`` or a selector ``argmax_v C_phi``. What it adds instead is a cheap
+pre-check on whether such a selector could ever help — if a per-frame oracle barely beats
+the best fixed choice, no learned predictor can beat it either.
 
-Section 13 also warns against reaching for mutual-information estimators before the
-empirical signal justifies it; nothing here does.
+That pre-check needs a null, because a per-frame minimum over several noisy models is
+biased downwards even when the models carry no complementary structure at all; see
+:func:`_selection_bias_floor` and harness contract C11
+(docs/harness_contract.md). Nothing here reaches for mutual-information estimators: the
+empirical signal does not yet justify them.
 """
 
 from __future__ import annotations
@@ -138,7 +140,7 @@ def complementarity(
         condition -> per-frame squared error, all aligned on the same frames (use
         :func:`p2c.analysis.results.join_per_sample`).
     primary_condition:
-        The partial-observation baseline, e.g. ``"single_primary"`` (B0).
+        The partial-observation baseline the others are measured against.
     candidate_conditions:
         Conditions that add exactly one view to the primary. Defaults to every other
         condition present, which is fine for reading the table but means the caller
@@ -197,7 +199,7 @@ def complementarity(
 def per_frame_complementarity(
     errors: dict[str, np.ndarray], primary_condition: str, candidate: str
 ) -> np.ndarray:
-    """Raw per-frame ``C(v | p)``, the oracle target of section 13."""
+    """Raw per-frame ``C(v | p)``: the oracle target, before any aggregation."""
     return errors[primary_condition] - errors[candidate]
 
 
@@ -208,7 +210,7 @@ def most_improved_frames(
     candidate: str,
     top_k: int = 16,
 ) -> list[dict]:
-    """Frames where the extra view helps most (SETUP.md section 11 asks to visualise these).
+    """Frames where the extra view helps most (PLAN.md section 9 asks to visualise these).
 
     Returns ``(episode, frame)`` decoded from the join keys, so the caller can go back to
     the cache and render exactly those timesteps.
