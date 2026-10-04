@@ -97,6 +97,11 @@ CACHE=outputs/cache/StackBowlsCabinet_target_r96_e120 CONFIG=configs/composite.y
   bash scripts/run_view_ablation.sh
 
 python scripts/summarize_view_ablation.py --input outputs/runs_composite
+
+# Verify the simulator path, then close the loop with a trained checkpoint.
+python scripts/check_sim_env.py
+python scripts/rollout_local_bc.py --checkpoint outputs/runs_composite/<run>/best.pt \
+    --episodes 2 --video outputs/viz/rollout.mp4
 ```
 
 RoboCasa365 ships mp4 already rendered for three synchronised cameras, so the data path

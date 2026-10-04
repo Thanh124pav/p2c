@@ -108,7 +108,35 @@ Also worth knowing: `robocasa.utils.env_utils.run_random_rollouts` reaches for `
 but `gym.make` returns an `OrderEnforcing` wrapper, so the documented one-liner raises
 `AttributeError`. Use `env.unwrapped.sim`.
 
-## 4. The data path needs no renderer either
+## 4. Closed loop: verified end to end
+
+`scripts/rollout_local_bc.py` loads a trained checkpoint, drives the RoboCasa simulator
+with it, and reports success rate. Run on the `primary+wrist` checkpoint: 2 episodes x 60
+steps and 1 episode x 80 steps completed, 0% success, video at
+`outputs/viz/rollout_tinybc.mp4`. The robot visibly moves in response to policy actions.
+
+0% is the expected result, not a failure: this is a ~1.8M-parameter sanity model trained
+for 12 epochs on a 4 GB GPU. What the run verifies is that the loop closes — observations
+assemble, the policy acts, the simulator steps.
+
+Three joins in that bridge, each of which would silently corrupt behaviour if wrong:
+
+1. **State assembly.** The gym wrapper exposes `state.*` and `video.*` keys with the same
+   names the LeRobot dataset uses, so the flat 16-D state is rebuilt from the cache's
+   recorded `state_groups` offsets rather than a hard-coded order, and raises if the cache
+   and the environment disagree about any group's width.
+2. **Normalisation is inverted.** The policy emits actions normalised with training-split
+   statistics; the environment expects raw ones. Statistics come from the checkpoint, and
+   state statistics are recomputed from the same cache and split.
+3. **Architecture reconstruction.** The first attempt failed to load the state dict:
+   training used `dropout: 0.1`, and `nn.Dropout` modules occupy positions in the head's
+   `Sequential`, so rebuilding without them shifted every later layer index. Dropout is
+   inert at eval time but must still exist.
+
+Throughput is ~2 s/step with three 256x256 cameras rendering, so local rollouts are for
+verification, not for measuring success rates at scale.
+
+## 5. The data path needs no renderer either
 
 RoboCasa365 datasets are LeRobot format and **ship mp4 already rendered for three
 synchronised cameras**. Verified by reading `meta/info.json` and decoding the mp4 directly:
@@ -127,7 +155,7 @@ Consequences:
   assigns to the remote server anyway.
 - The three real cameras support the viewpoint partialization axis end to end.
 
-## 5. Datasets downloaded (verified)
+## 6. Datasets downloaded (verified)
 
 Stored under `datasets/` (gitignored), 1.7 GB total. Downloaded with a standalone script
 replicating `robocasa.scripts.download_datasets` path logic, because robocasa was not
@@ -167,7 +195,7 @@ Other measured sizes, for planning: `TurnOnMicrowave` 0.34 GB, `OpenDrawer` 0.48
 ORACLE-tier (PLAN.md section 9): legitimate for analysis and for constructing controlled
 conditions such as phase-drop partialization, never as method input.
 
-## 6. Code written
+## 7. Code written
 
 All of it reads the schema from disk; no camera name, resolution or action dimension is
 hard-coded (PLAN.md section 6.1).
@@ -196,6 +224,8 @@ scripts/visualize_episode.py    synchronised multi-view grid / video
 scripts/build_frame_cache.py    decode mp4 once into a uint8 memmap cache
 scripts/train_local_bc.py       train one view condition
 scripts/eval_local_bc.py        evaluate a checkpoint, incl. cross-condition
+scripts/check_sim_env.py        probe each MuJoCo GL backend for working rendering
+scripts/rollout_local_bc.py     closed-loop rollout of a checkpoint in the simulator
 scripts/run_view_ablation.sh    sweep conditions with everything else held fixed
 scripts/summarize_view_ablation.py  tables, CSVs, figures, complementarity, verdict
 scripts/make_dp_configs.py      generate Diffusion Policy camera-subset configs
@@ -221,7 +251,7 @@ Three design decisions worth keeping in mind:
    action-free video cannot quietly come to depend on robot supervision or privileged
    simulator state.
 
-## 7. Tests (verified passing)
+## 8. Tests (verified passing)
 
 **221 passed** across `test_camera_subset`, `test_analysis`, `test_dataset`,
 `test_model_forward`, `test_lerobot_meta`, `test_tiers` and `test_partialization`. They run
@@ -233,7 +263,7 @@ Run them with:
 /home/pavt1024/miniconda3/envs/robocasa/bin/python -m pytest tests -q
 ```
 
-## 8. Bugs found and fixed while building
+## 9. Bugs found and fixed while building
 
 Recorded because each produced a plausible-looking wrong answer rather than an error.
 
@@ -262,7 +292,7 @@ Recorded because each produced a plausible-looking wrong answer rather than an e
   **90%**, above the observed value. The entire headroom was selection bias. Now reported
   against that null (harness contract C11).
 
-## 9. Experiments run (earlier multi-view study)
+## 10. Experiments run (earlier multi-view study)
 
 Kept as measured facts. PLAN.md section 13.6 is explicit that these must not define the
 research problem.
@@ -320,7 +350,7 @@ recoverable from the image, so a vision-only policy there cannot beat the condit
 however many cameras it gets. `StackBowlsCabinet` has **1** instruction for all 515
 episodes. Every run now prints its instruction count and warns when it exceeds one.
 
-## 10. Open items
+## 11. Open items
 
 1. **Method design** — PLAN.md section 14 puts the P2C-v0 specification before any further
    implementation, and section 13.5 forbids scaling before a falsifiable local signal.
